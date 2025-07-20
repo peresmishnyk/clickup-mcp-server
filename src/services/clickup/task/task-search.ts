@@ -1144,6 +1144,58 @@ export class TaskServiceSearch {
   }
 
   /**
+   * Direct Team API approach (Gemini recommendation)
+   * Uses pure /team/{teamId}/task?list_ids[]=LIST_ID endpoint to get ALL tasks including multi-list
+   * This bypasses Views API and directly queries ClickUp's team endpoint
+   * @param listIds Array of list IDs to search for tasks
+   * @param filters Additional filters to apply
+   * @returns Array of ClickUpTask objects from team endpoint
+   */
+  async getTeamTasksDirectly(listIds: string[], filters: ExtendedTaskFilters = {}): Promise<ClickUpTask[]> {
+    try {
+      (this.core as any).logOperation('getTeamTasksDirectly', { 
+        listIds, 
+        filters,
+        method: 'Pure Team API - Gemini Recommendation'
+      });
+
+      // Build filters for team endpoint
+      const teamFilters: ExtendedTaskFilters = {
+        ...filters,
+        list_ids: listIds // This is the key parameter according to Gemini
+      };
+
+      // Use direct team endpoint call
+      const params = (this.core as any).buildTaskFilterParams(teamFilters);
+      const response = await (this.core as any).makeRequest(async () => {
+        return await (this.core as any).client.get(`/team/${(this.core as any).teamId}/task`, {
+          params
+        });
+      });
+
+      const tasks = response.data.tasks || [];
+
+      (this.core as any).logOperation('getTeamTasksDirectly', {
+        listIds,
+        totalTasksFound: tasks.length,
+        method: 'Direct Team API Success',
+        endpoint: `/team/${(this.core as any).teamId}/task`,
+        listIdsParam: `list_ids[]=${listIds.join('&list_ids[]=')}`
+      });
+
+      return tasks;
+
+    } catch (error) {
+      (this.core as any).logOperation('getTeamTasksDirectly', {
+        listIds,
+        error: error.message,
+        method: 'Direct Team API Failed'
+      });
+      throw (this.core as any).handleError(error, `Failed to get team tasks directly for lists: ${listIds.join(', ')}`);
+    }
+  }
+
+  /**
    * Enhanced multi-list task discovery using hybrid approach
    * Combines Views API, workspace search, and cross-reference detection
    * @param listIds Array of list IDs to search for associated tasks
@@ -1157,7 +1209,7 @@ export class TaskServiceSearch {
       const allTasks: ClickUpTask[] = [];
       const processedTaskIds = new Set<string>();
 
-      // Phase 1: Views API approach (existing implementation)
+      // Phase 1: Direct Team API approach (Gemini recommendation) with Views API fallback
       const viewsTasks = await this.getTasksFromViews(listIds, filters);
       this.addUniqueTasksToCollection(viewsTasks, allTasks, processedTaskIds);
 
@@ -1189,27 +1241,97 @@ export class TaskServiceSearch {
   }
 
   /**
-   * Phase 1: Enhanced Views API approach
+   * Phase 1: Direct Team API approach (Gemini recommendation) with Views API fallback
+   * Uses /team/{teamId}/task?list_ids[]=LIST_ID to get ALL tasks including multi-list
    */
   private async getTasksFromViews(listIds: string[], filters: ExtendedTaskFilters): Promise<ClickUpTask[]> {
     const allTasks: ClickUpTask[] = [];
 
+    try {
+      // PRIMARY: Direct Team API (Gemini recommendation)
+      (this.core as any).logOperation('getTasksFromViews', {
+        listIds,
+        method: 'Direct Team API (Gemini recommendation)',
+        phase: 'Phase 1 - Primary approach'
+      });
+
+      const teamTasks = await this.getTeamTasksDirectly(listIds, filters);
+      if (teamTasks.length > 0) {
+        (this.core as any).logOperation('getTasksFromViews', {
+          listIds,
+          method: 'Direct Team API SUCCESS',
+          tasksFound: teamTasks.length,
+          result: 'Found tasks with Direct Team API - multi-list tasks included!'
+        });
+        return teamTasks;
+      }
+
+      (this.core as any).logOperation('getTasksFromViews', {
+        listIds,
+        warning: 'Direct Team API returned no tasks, trying Views API fallback'
+      });
+
+    } catch (error) {
+      (this.core as any).logOperation('getTasksFromViews', {
+        listIds,
+        error: `Direct Team API failed: ${error.message}`,
+        fallback: 'Trying Views API + Direct List API fallback'
+      });
+    }
+
+    // FALLBACK: Original Views API + Direct List API approach
     const fetchPromises = listIds.map(async (listId: string) => {
       try {
+        // Try Views API first
         const viewId = await this.getListViews(listId);
-        if (!viewId) {
-          (this.core as any).logOperation('getTasksFromViews', {
-            listId,
-            warning: 'No default view found for list'
-          });
-          return [];
+        if (viewId) {
+          const viewTasks = await this.getTasksFromView(viewId, filters);
+          if (viewTasks.length > 0) {
+            (this.core as any).logOperation('getTasksFromViews', {
+              listId,
+              method: 'Views API (fallback)',
+              tasksFound: viewTasks.length
+            });
+            return viewTasks;
+          }
         }
 
-        return await this.getTasksFromView(viewId, filters);
+        // Final fallback: Direct List API
+        (this.core as any).logOperation('getTasksFromViews', {
+          listId,
+          warning: 'Views API failed, trying Direct List API final fallback'
+        });
+
+        // Convert ExtendedTaskFilters to basic TaskFilters for Direct List API
+        const basicFilters: any = {};
+        if (filters.include_closed !== undefined) basicFilters.include_closed = filters.include_closed;
+        if (filters.archived !== undefined) basicFilters.archived = filters.archived;
+        if (filters.page !== undefined) basicFilters.page = filters.page;
+        if (filters.order_by) basicFilters.order_by = filters.order_by;
+        if (filters.reverse !== undefined) basicFilters.reverse = filters.reverse;
+        if (filters.subtasks !== undefined) basicFilters.subtasks = filters.subtasks;
+        if (filters.statuses && filters.statuses.length > 0) basicFilters.statuses = filters.statuses;
+        if (filters.assignees && filters.assignees.length > 0) basicFilters.assignees = filters.assignees;
+        if (filters.date_created_gt) basicFilters.date_created_gt = filters.date_created_gt;
+        if (filters.date_created_lt) basicFilters.date_created_lt = filters.date_created_lt;
+        if (filters.date_updated_gt) basicFilters.date_updated_gt = filters.date_updated_gt;
+        if (filters.date_updated_lt) basicFilters.date_updated_lt = filters.date_updated_lt;
+        if (filters.due_date_gt) basicFilters.due_date_gt = filters.due_date_gt;
+        if (filters.due_date_lt) basicFilters.due_date_lt = filters.due_date_lt;
+
+        const directTasks = await (this.core as any).getTasks(listId, basicFilters);
+        (this.core as any).logOperation('getTasksFromViews', {
+          listId,
+          method: 'Direct List API (final fallback)',
+          tasksFound: directTasks.length
+        });
+        return directTasks;
+
       } catch (error) {
         (this.core as any).logOperation('getTasksFromViews', {
           listId,
-          error: error.message
+          error: error.message,
+          allFallbacksAttempted: true
         });
         return [];
       }
@@ -1224,47 +1346,108 @@ export class TaskServiceSearch {
   }
 
   /**
-   * Phase 2: Cross-reference search using workspace endpoint
-   * Searches for tasks that have target lists in their 'locations' field
+   * Phase 2: Cross-reference search using alternative strategies
+   * Uses Direct List API in related spaces since Workspace API is unreliable
    */
   private async findTasksByLocationsCrossReference(listIds: string[], filters: ExtendedTaskFilters): Promise<ClickUpTask[]> {
     try {
-      (this.core as any).logOperation('findTasksByLocationsCrossReference', { listIds });
+      (this.core as any).logOperation('findTasksByLocationsCrossReference', { 
+        listIds, 
+        strategy: 'Direct List API - Alternative to Workspace API' 
+      });
 
-      // Get all workspace tasks with basic filters
-      const workspaceFilters: ExtendedTaskFilters = {
-        ...filters,
-        // Remove list_ids to get broader search
-        list_ids: undefined,
-        // Use date range to limit scope if no other filters provided
-        date_updated_gt: filters.date_updated_gt || Date.now() - (90 * 24 * 60 * 60 * 1000) // Last 90 days
-      };
+      const crossRefTasks: ClickUpTask[] = [];
 
-      const workspaceTasks = await this.getWorkspaceTasks(workspaceFilters);
-      const tasks = 'tasks' in workspaceTasks ? workspaceTasks.tasks : [];
-
-      // Filter tasks that have target lists in their locations
-      const multiListTasks = tasks.filter(task => {
-        if (!task.locations || task.locations.length === 0) {
-          return false;
+      // Strategy 1: Search in commonly related lists within the same spaces
+      try {
+        // Get space IDs from target lists to search related lists
+        const spaceListsMap = new Map<string, string[]>();
+        
+        for (const listId of listIds) {
+          try {
+            const list = await (this.core as any).listService.getList(listId);
+            const spaceId = list.space?.id;
+            if (spaceId) {
+              if (!spaceListsMap.has(spaceId)) {
+                spaceListsMap.set(spaceId, []);
+              }
+              spaceListsMap.get(spaceId)!.push(listId);
+            }
+          } catch (error) {
+            (this.core as any).logOperation('findTasksByLocationsCrossReference', {
+              listId,
+              error: 'Failed to get list details for space mapping'
+            });
+          }
         }
 
-        // Check if task has any of our target lists in locations
-        return task.locations.some(location => 
-          listIds.includes(location.id)
-        );
-      });
+        // Search in related lists within same spaces
+        for (const [spaceId, spaceListIds] of spaceListsMap) {
+          try {
+            // Get other lists in the same space
+            const spaceLists = await (this.core as any).workspaceService.getListsInSpace(spaceId);
+            const relatedListIds = spaceLists
+              .map(list => list.id)
+              .filter(id => !spaceListIds.includes(id)) // Exclude target lists
+              .slice(0, 10); // Limit to avoid rate limits
+
+            // Search each related list for tasks that might reference our target lists
+            for (const relatedListId of relatedListIds) {
+              try {
+                const basicFilters: any = {};
+                if (filters.include_closed !== undefined) basicFilters.include_closed = filters.include_closed;
+                if (filters.archived !== undefined) basicFilters.archived = filters.archived;
+                if (filters.assignees && filters.assignees.length > 0) basicFilters.assignees = filters.assignees;
+
+                const relatedTasks = await (this.core as any).getTasks(relatedListId, basicFilters);
+                
+                // Filter tasks that have target lists in their locations
+                const matchingTasks = relatedTasks.filter(task => {
+                  const locations = task.locations || [];
+                  return locations.some(location => listIds.includes(location.id));
+                });
+
+                crossRefTasks.push(...matchingTasks);
+                
+                if (matchingTasks.length > 0) {
+                  (this.core as any).logOperation('findTasksByLocationsCrossReference', {
+                    relatedListId,
+                    spaceId,
+                    tasksWithMatchingLocations: matchingTasks.length
+                  });
+                }
+              } catch (error) {
+                // Continue searching other lists if one fails
+                (this.core as any).logOperation('findTasksByLocationsCrossReference', {
+                  relatedListId,
+                  error: 'Failed to search related list'
+                });
+              }
+            }
+          } catch (error) {
+            (this.core as any).logOperation('findTasksByLocationsCrossReference', {
+              spaceId,
+              error: 'Failed to get lists in space'
+            });
+          }
+        }
+      } catch (error) {
+        (this.core as any).logOperation('findTasksByLocationsCrossReference', {
+          error: 'Strategy 1 failed completely',
+          message: error.message
+        });
+      }
 
       (this.core as any).logOperation('findTasksByLocationsCrossReference', {
-        totalWorkspaceTasks: tasks.length,
-        multiListTasksFound: multiListTasks.length,
-        targetListIds: listIds
+        totalCrossRefTasks: crossRefTasks.length,
+        strategy: 'Direct List API search in related spaces'
       });
 
-      return multiListTasks;
+      return crossRefTasks;
 
     } catch (error) {
       (this.core as any).logOperation('findTasksByLocationsCrossReference', {
+        listIds,
         error: error.message
       });
       return [];

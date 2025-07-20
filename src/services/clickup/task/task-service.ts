@@ -77,6 +77,10 @@ export class TaskService extends TaskServiceCore {
     return this.search.getTasksFromView(viewId, filters);
   }
 
+  async getTeamTasksDirectly(listIds: string[], filters: ExtendedTaskFilters = {}): Promise<ClickUpTask[]> {
+    return this.search.getTeamTasksDirectly(listIds, filters);
+  }
+
   async getTaskDetails(filters: ExtendedTaskFilters = {}): Promise<DetailedTaskResponse> {
     return this.search.getTaskDetails(filters);
   }

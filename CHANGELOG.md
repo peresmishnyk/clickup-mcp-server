@@ -2,6 +2,62 @@
 
 ## [Unreleased]
 
+## v0.9.3 (2025-01-27)
+
+### 🎯 **Gemini AI Recommendation Implementation**
+
+- **Direct Team API Integration**: Implemented Gemini's recommended solution using `/team/{teamId}/task?list_ids[]=LIST_ID` endpoint
+- **Primary Strategy Change**: Direct Team API is now the primary method in Phase 1 (instead of Views API)
+- **Multi-List Task Discovery**: Should now properly find tasks that are in additional lists (not just "home" lists)
+- **Smart Fallback Chain**: Direct Team API → Views API → Direct List API
+
+### 🔧 **Technical Implementation**
+
+- **New Method**: `getTeamTasksDirectly()` - pure team endpoint implementation
+- **Enhanced Phase 1**: Uses Direct Team API as primary, Views API as fallback
+- **Better Logging**: Shows which API method succeeded/failed for diagnostics
+- **Gemini Compliance**: Follows exact recommendation for multi-list task discovery
+
+### 📋 **Problem Addressed**
+
+**Gemini identified**: Standard `/list/{listId}/task` only returns "home" tasks, not additional/multi-list tasks.  
+**Solution**: Use `/team/{teamId}/task?list_ids[]=LIST_ID` to get ALL tasks including those in additional lists.
+
+### 🎯 **Expected Result**
+
+Should now find tasks visible in ClickUp UI "From another List" sections that were previously missing from API results.
+
+## v0.9.2 (2025-01-27)
+
+### 🚀 Enhanced Multi-List Discovery Engine
+
+- **Enhanced Phase 1**: Added Direct List API fallback when Views API fails or returns no tasks
+- **Redesigned Phase 2**: Replaced unreliable Workspace API with Direct List API search in related spaces  
+- **Improved Reliability**: Better handling of API limitations and network issues
+- **Smart Fallbacks**: Automatic fallback strategies when primary methods fail
+
+### 🔧 Technical Improvements
+
+- **Views API Fallback**: If Views API fails, automatically tries Direct List API with same filters
+- **Space-Based Cross-Reference**: Searches related lists within same spaces for multi-list tasks
+- **Enhanced Logging**: Better diagnostics showing which API method was used (Views vs Direct)
+- **Rate Limit Protection**: Limited concurrent searches to avoid API rate limits
+
+### 📊 Discovery Strategy
+
+```
+Phase 1: Views API → Direct List API (fallback)
+Phase 2: Direct List API in related spaces
+Phase 3: Relationship discovery (unchanged)
+```
+
+### 🎯 Problem Solved
+
+This release addresses cases where:
+- Views API returns empty results despite tasks existing in UI
+- Workspace API is unreliable or blocked by permissions
+- Multi-list tasks appear in UI but not through standard API calls
+
 ## v0.9.1 (2025-01-27)
 
 ### 🐛 Bug Fixes
