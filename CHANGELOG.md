@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+## v0.9.1 (2025-01-27)
+
+### 🐛 Bug Fixes
+
+- **Fixed getMultiListTasks registration**: Added missing getMultiListTasks tool registration in server.ts
+- **Fixed TypeScript compilation**: Added getMultiListTasks method delegation in TaskService
+- **Fixed tool count**: Updated tool count from 36 to 37 to include new getMultiListTasks tool
+- **Complete MCP integration**: getMultiListTasks now properly accessible through MCP interface
+
+### 📊 Technical Details
+
+- Added getMultiListTasks import and registration in tools list
+- Added getMultiListTasks delegation method in TaskService class
+- Updated server version information and tool count logging
+- All 37 tools now properly registered and accessible
+
 ## v0.9.0 (2025-01-27)
 
 ### 🚀 Major Feature: Enhanced Multi-List Task Discovery
