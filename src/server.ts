@@ -32,6 +32,7 @@ import {
   deleteBulkTasksTool,
   attachTaskFileTool,
   getWorkspaceTasksTool,
+  getMultiListTasksTool,
   getTaskTimeEntriesTool,
   startTimeTrackingTool,
   stopTimeTrackingTool,
@@ -139,7 +140,7 @@ const isToolEnabled = (toolName: string): boolean => {
 export const server = new Server(
   {
     name: "clickup-mcp-server",
-    version: "0.8.5",
+    version: "0.9.0",
   },
   {
     capabilities: {
@@ -194,6 +195,7 @@ export function configureServer() {
         moveBulkTasksTool,
         deleteBulkTasksTool,
         getWorkspaceTasksTool,
+        getMultiListTasksTool,
         getTaskTimeEntriesTool,
         startTimeTrackingTool,
         stopTimeTrackingTool,
@@ -229,7 +231,7 @@ export function configureServer() {
 
   // Register CallTool handler with proper logging
   logger.info("Registering tool handlers", {
-    toolCount: 36,
+    toolCount: 37,
     categories: ["workspace", "task", "time-tracking", "list", "folder", "tag", "member", "document"]
   });
 
