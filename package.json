@@ -1,6 +1,6 @@
 {
   "name": "@taazkareem/clickup-mcp-server",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "ClickUp MCP Server - Integrate ClickUp tasks with AI through Model Context Protocol",
   "type": "module",
   "main": "build/index.js",

@@ -1662,30 +1662,108 @@ export class TaskServiceSearch {
    * @returns Array of ClickUpTask objects from all sources
    */
   async getMultiListTasks(listIds: string[], filters: ExtendedTaskFilters = {}): Promise<ClickUpTask[]> {
-    try {
-      (this.core as any).logOperation('getMultiListTasks', { listIds, filters });
+    (this.core as any).logOperation('getMultiListTasks', { 
+      listIds, 
+      filters,
+      v102_critical_fix: 'ROUTING FIX - Adding getTeamTasksDirectly as primary method',
+      previous_issue: 'Multi-list never reached Independent Parallel Strategy',
+      new_approach: 'Primary: getTeamTasksDirectly → Fallback: getTasksFromViews'
+    });
 
-      const allTasks: ClickUpTask[] = [];
+    try {
+      // v1.0.2 CRITICAL FIX: Try getTeamTasksDirectly first for multi-list
+      (this.core as any).logOperation('getMultiListTasks', {
+        listIds,
+        v102_primary_attempt: 'TRYING getTeamTasksDirectly for multi-list',
+        reasoning: 'This should activate Independent Parallel Strategy',
+        expected_result: 'Direct Team API (Independent Parallel Strategy v1.0.1)'
+      });
+
+      const primaryResults = await this.getTeamTasksDirectly(listIds, filters);
+      
+      (this.core as any).logOperation('getMultiListTasks', {
+        listIds,
+        v102_primary_results: 'getTeamTasksDirectly completed',
+        tasksFound: primaryResults.length,
+        discoverySourceCheck: primaryResults.map(task => (task as any)._discovery_source).filter(Boolean),
+        hasParallelV099: primaryResults.some(task => (task as any)._discovery_source === 'direct_team_api_parallel_v099'),
+        decision: primaryResults.length > 0 ? 'Use primary results' : 'Fallback to getTasksFromViews'
+      });
+
+      // If primary method worked, use those results
+      if (primaryResults.length > 0) {
+        // Mark as v1.0.2 success
+        const markedResults = primaryResults.map(task => ({
+          ...task,
+          _v102_success: 'PRIMARY_GETTEAMTASKSDIRECTLY_SUCCESS',
+          _discovery_method_override: 'Direct Team API (Multi-List Primary v1.0.2)'
+        }));
+
+        (this.core as any).logOperation('getMultiListTasks', {
+          listIds,
+          v102_success: 'PRIMARY METHOD SUCCESS - Independent Parallel Strategy should be visible',
+          finalTaskCount: markedResults.length,
+          discoveryMethod: 'Direct Team API (Multi-List Primary v1.0.2)',
+          note: 'This should finally show Independent Parallel Strategy in metadata!'
+        });
+
+        return markedResults as ClickUpTask[];
+      }
+
+      // v1.0.2 Fallback: If primary method failed, use existing hybrid approach
+      (this.core as any).logOperation('getMultiListTasks', {
+        listIds,
+        v102_fallback: 'PRIMARY METHOD RETURNED ZERO - Falling back to getTasksFromViews',
+        reason: 'getTeamTasksDirectly found no tasks, trying Views API approach'
+      });
+
+      // v1.0.2 COMPLETE FALLBACK: Full hybrid approach with all phases
+      (this.core as any).logOperation('getMultiListTasks', {
+        listIds,
+        v102_complete_fallback: 'STARTING FULL HYBRID APPROACH',
+        phases: ['Views API', 'Cross-Reference', 'Relationships'],
+        note: 'Restoring complete multi-list discovery logic'
+      });
+
+      const allFallbackTasks: ClickUpTask[] = [];
       const processedTaskIds = new Set<string>();
 
-      // Phase 1: Direct Team API approach (Gemini recommendation) with Views API fallback
+      // Phase 1: Views API (was getTasksFromViews)
       const viewsTasks = await this.getTasksFromViews(listIds, filters);
-      this.addUniqueTasksToCollection(viewsTasks, allTasks, processedTaskIds);
+      this.addUniqueTasksToCollection(viewsTasks, allFallbackTasks, processedTaskIds);
 
       // Phase 2: Cross-reference search in workspace
       const crossRefTasks = await this.findTasksByLocationsCrossReference(listIds, filters);
-      this.addUniqueTasksToCollection(crossRefTasks, allTasks, processedTaskIds);
+      this.addUniqueTasksToCollection(crossRefTasks, allFallbackTasks, processedTaskIds);
 
       // Phase 3: Direct task relationship analysis
       const relationshipTasks = await this.findTasksByRelationships(listIds, filters);
-      this.addUniqueTasksToCollection(relationshipTasks, allTasks, processedTaskIds);
+      this.addUniqueTasksToCollection(relationshipTasks, allFallbackTasks, processedTaskIds);
 
       (this.core as any).logOperation('getMultiListTasks', {
+        listIds,
+        v102_fallback_complete: 'FULL HYBRID APPROACH COMPLETED',
         totalListIds: listIds.length,
-        totalUniqueTasksFound: allTasks.length,
+        totalUniqueTasksFound: allFallbackTasks.length,
         viewsTasksFound: viewsTasks.length,
         crossRefTasksFound: crossRefTasks.length,
-        relationshipTasksFound: relationshipTasks.length
+        relationshipTasksFound: relationshipTasks.length,
+        discoverySourceCheck: allFallbackTasks.map(task => (task as any)._discovery_source).filter(Boolean)
+      });
+
+      // Combine primary and complete fallback results
+      const allTasks = primaryResults.concat(allFallbackTasks);
+
+      (this.core as any).logOperation('getMultiListTasks', {
+        listIds,
+        v102_final_result: 'getMultiListTasks FULLY completed',
+        totalTasks: allTasks.length,
+        primaryTasks: primaryResults.length,
+        fallbackTasks: allFallbackTasks.length,
+        discoverySourceCheck: allTasks.map(task => (task as any)._discovery_source).filter(Boolean),
+        hasParallelV099: allTasks.some(task => (task as any)._discovery_source === 'direct_team_api_parallel_v099'),
+        hasViewsApiFallback: allTasks.some(task => (task as any)._discovery_source === 'views_api_fallback'),
+        decision: allTasks.length > 0 ? 'Use combined results' : 'No tasks found in any source'
       });
 
       return allTasks;

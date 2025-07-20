@@ -971,11 +971,22 @@ export async function getWorkspaceTasksHandler(
         const directListApiFallbackTasks = allTasks.filter(task => (task as any)._discovery_source === 'direct_list_api_fallback');
         const untaggedTasks = allTasks.filter(task => !(task as any)._discovery_source);
 
-        // v1.0.1 CRITICAL FIX: Check for Independent Parallel Strategy force debug markers
-        const v101ForceDebugTasks = allTasks.filter(task => (task as any)._v101_force_debug === true);
-        const discoveryMethodOverrideTasks = allTasks.filter(task => (task as any)._discovery_method_override);
+        // v1.0.2 CRITICAL: Check for _v102_success and _discovery_method_override
+        const v102SuccessTasks = allTasks.filter(task => (task as any)._v102_success);
+        const hasDiscoveryMethodOverride = allTasks.some(task => (task as any)._discovery_method_override);
         
-        logger.info('Discovery Source Analysis v1.0.1', {
+        if (v102SuccessTasks.length > 0 || hasDiscoveryMethodOverride) {
+          (this.core as any).logOperation('Discovery Source Analysis', {
+            v102_detected: 'SUCCESS MARKERS FOUND',
+            v102SuccessTasks: v102SuccessTasks.length,
+            hasDiscoveryMethodOverride,
+            sampleOverride: (allTasks.find(task => (task as any)._discovery_method_override) as any)?._discovery_method_override,
+            totalTasks: allTasks.length,
+            note: 'v1.0.2 Primary getTeamTasksDirectly approach succeeded!'
+          });
+        }
+
+        logger.info('Discovery Source Analysis', {
           totalTasks: allTasks.length,
           directTeamApiTasks: directTeamApiTasks.length,
           directTeamApiParallelTasks: directTeamApiParallelTasks.length,
@@ -983,8 +994,8 @@ export async function getWorkspaceTasksHandler(
           viewsApiFallbackTasks: viewsApiFallbackTasks.length,
           directListApiFallbackTasks: directListApiFallbackTasks.length,
           untaggedTasks: untaggedTasks.length,
-          v101ForceDebugTasks: v101ForceDebugTasks.length,
-          discoveryMethodOverrideTasks: discoveryMethodOverrideTasks.length
+          v102SuccessTasks: v102SuccessTasks.length,
+          hasDiscoveryMethodOverride
         });
 
         const totalDirectTeamApiTasks = directTeamApiTasks.length + directTeamApiParallelTasks.length + directTeamApiParallelV099Tasks.length;
@@ -992,10 +1003,18 @@ export async function getWorkspaceTasksHandler(
         // Always include other hybrid phases
         phasesUsed.push('Cross-Reference', 'Relationships');
 
-        // v1.0.1 CRITICAL FIX: Check for Independent Parallel Strategy first
-        if (v101ForceDebugTasks.length > 0 || discoveryMethodOverrideTasks.length > 0) {
-          discoveryMethod = 'Direct Team API (Independent Parallel Strategy v1.0.1)';
-          phasesUsed = ['Independent Parallel Strategy v1.0.1'];
+        // v1.0.2 CRITICAL FIX: Check for _discovery_method_override first
+        if (hasDiscoveryMethodOverride) {
+          const sampleOverride = (allTasks.find(task => (task as any)._discovery_method_override) as any)?._discovery_method_override;
+          discoveryMethod = sampleOverride || 'Direct Team API (Multi-List Primary v1.0.2)';
+          phasesUsed = []; // Clear phases since this used primary method
+          
+          (this.core as any).logOperation('Discovery Method Override Applied', {
+            discoveryMethodOverride: sampleOverride,
+            v102SuccessTasks: v102SuccessTasks.length,
+            totalTasks: allTasks.length,
+            note: 'v1.0.2 Primary getTeamTasksDirectly succeeded for multi-list!'
+          });
         }
         // Update discovery method based on what was actually used
         else if (totalDirectTeamApiTasks === allTasks.length) {
