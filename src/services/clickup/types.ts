@@ -219,6 +219,10 @@ export interface ClickUpTask {
     name: string;
   };
   url: string;
+  locations?: Array<{
+    id: string;
+    name: string;
+  }>;
   subtasks?: ClickUpTask[];
 }
 
