@@ -94,6 +94,10 @@ import {
   resolveAssigneesTool, handleResolveAssignees
 } from "./tools/member.js";
 
+import {
+  getVersionTool, handleGetVersion
+} from "./tools/version.js";
+
 import { Logger } from "./logger.js";
 import { clickUpServices } from "./services/shared.js";
 
@@ -207,6 +211,7 @@ export function configureServer() {
         getWorkspaceMembersTool,
         findMemberByNameTool,
         resolveAssigneesTool,
+        getVersionTool,
         ...documentModule()
       ].filter(tool => isToolEnabled(tool.name))
     };
@@ -335,6 +340,8 @@ export function configureServer() {
           return handleFindMemberByName(params);
         case "resolve_assignees":
           return handleResolveAssignees(params);
+        case "get_version":
+          return handleGetVersion();
         default:
           logger.error(`Unknown tool requested: ${name}`);
           const error = new Error(`Unknown tool: ${name}`);
