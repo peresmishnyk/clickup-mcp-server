@@ -976,7 +976,7 @@ export async function getWorkspaceTasksHandler(
         const hasDiscoveryMethodOverride = allTasks.some(task => (task as any)._discovery_method_override);
         
         if (v102SuccessTasks.length > 0 || hasDiscoveryMethodOverride) {
-          (this.core as any).logOperation('Discovery Source Analysis', {
+          logger.info('Discovery Source Analysis - v1.0.2 SUCCESS MARKERS FOUND', {
             v102_detected: 'SUCCESS MARKERS FOUND',
             v102SuccessTasks: v102SuccessTasks.length,
             hasDiscoveryMethodOverride,
@@ -1009,7 +1009,7 @@ export async function getWorkspaceTasksHandler(
           discoveryMethod = sampleOverride || 'Direct Team API (Multi-List Primary v1.0.2)';
           phasesUsed = []; // Clear phases since this used primary method
           
-          (this.core as any).logOperation('Discovery Method Override Applied', {
+          logger.info('Discovery Method Override Applied - v1.0.2', {
             discoveryMethodOverride: sampleOverride,
             v102SuccessTasks: v102SuccessTasks.length,
             totalTasks: allTasks.length,
