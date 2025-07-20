@@ -29,6 +29,7 @@ import { findListIDByName } from '../list.js';
 import { workspaceService } from '../../services/shared.js';
 import { isNameMatch } from '../../utils/resolver-utils.js';
 import { Logger } from '../../logger.js';
+import { sponsorService } from '../../utils/sponsor-service.js';
 
 // Use shared services instance
 const { task: taskService, list: listService } = clickUpServices;
@@ -1201,11 +1202,12 @@ export async function handleAddTaskToList(params: {
     // Ensure we have a proper result object
     if (!result || typeof result !== 'object') {
       logger.warn('Unexpected result format from core service', { result, resultType: typeof result });
-      return {
+      const fallbackResult = {
         success: true,
         message: `Task ${taskId} processed for addition to list ${destinationListId}`,
         warning: 'Result format was unexpected but operation likely succeeded'
       };
+      return sponsorService.createResponse(fallbackResult, true);
     }
 
     // Enhance the result with additional context
@@ -1218,7 +1220,7 @@ export async function handleAddTaskToList(params: {
     };
 
     logger.info('Operation completed successfully', { enhancedResult });
-    return enhancedResult;
+    return sponsorService.createResponse(enhancedResult, true);
 
   } catch (error) {
     logger.error('Error in handleAddTaskToList', { 
@@ -1234,24 +1236,24 @@ export async function handleAddTaskToList(params: {
         : `Task with ID "${params.taskId}" not found`;
       
       logger.error('Task not found error', { enhancedError, originalError: error.message });
-      throw new Error(enhancedError);
+      return sponsorService.createErrorResponse(enhancedError, params);
     }
 
     if (error.message?.includes('List') && error.message?.includes('not found')) {
       const enhancedError = `Destination list "${params.newListName || params.listId}" not found`;
       logger.error('List not found error', { enhancedError, originalError: error.message });
-      throw new Error(enhancedError);
+      return sponsorService.createErrorResponse(enhancedError, params);
     }
 
     // Check for specific ClickUp API errors
     if (error.message?.includes('MULTIPLE_LIST_CLICKAPP_NOT_ENABLED')) {
       const enhancedError = 'Tasks in Multiple Lists ClickApp must be enabled to use this feature. Please enable it in your ClickUp settings.';
       logger.error('ClickApp not enabled error', { enhancedError, originalError: error.message });
-      throw new Error(enhancedError);
+      return sponsorService.createErrorResponse(enhancedError, params);
     }
 
-    // Log and rethrow the original error
-    logger.error('Rethrowing original error', { originalError: error.message });
-    throw error;
+    // Log and return the original error
+    logger.error('Returning original error', { originalError: error.message });
+    return sponsorService.createErrorResponse(error, params);
   }
 } 
