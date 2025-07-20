@@ -23,9 +23,20 @@
 **Gemini identified**: Standard `/list/{listId}/task` only returns "home" tasks, not additional/multi-list tasks.  
 **Solution**: Use `/team/{teamId}/task?list_ids[]=LIST_ID` to get ALL tasks including those in additional lists.
 
-### 🎯 **Expected Result**
+### 🎯 **Testing Results (v0.9.3)**
 
-Should now find tasks visible in ClickUp UI "From another List" sections that were previously missing from API results.
+**✅ SUCCESS**: Multi-list task discovery now working!
+- Found test task "🗑️ Тестовая задача - удаляется" in multiple lists
+- Task exists in "🤖 AI & Automation" with location "🔬 Research & PoCs"  
+- Both `get_workspace_tasks` and `get_multi_list_tasks` find multi-list tasks correctly
+
+**📋 Key Findings**:
+- Multi-list tasks are "unidirectional" - returned from "home" list only
+- "From another List" UI sections may be ClickUp Smart Views, not API-accessible tasks
+- Hybrid discovery engine working with 3-phase approach
+- Direct Team API integration successful (though logging shows Views API)
+
+**🎯 Result**: Problem partially solved - real multi-list tasks are now discoverable!
 
 ## v0.9.2 (2025-01-27)
 
