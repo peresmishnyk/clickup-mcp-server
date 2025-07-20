@@ -500,3 +500,37 @@ export const deleteTaskTool = {
     }
   }
 }; 
+
+/**
+ * Tool definition for adding a task to an additional list
+ */
+export const addTaskToListTool = {
+  name: "add_task_to_list",
+  description: `Adds existing task to additional list (multi-list association). Use taskId (preferred) or taskName + optional listName for task identification, and listId (preferred) or newListName for destination list. Does NOT move or duplicate - creates multi-list visibility. Requires "Tasks in Multiple Lists" ClickApp enabled.`,
+  inputSchema: {
+    type: "object",
+    properties: {
+      taskId: {
+        type: "string",
+        description: "ID of task to add to list (preferred). Automatically detects and handles both regular task IDs (9 characters) and custom IDs (like 'DEV-1234', 'PROJ-456')."
+      },
+      taskName: {
+        type: "string",
+        description: "Name of task to add to list. The tool will search for tasks with this name across all lists unless listName is specified."
+      },
+      listName: {
+        type: "string",
+        description: "Optional: Name of list containing the task. Providing this narrows the search to a specific list, improving performance and reducing ambiguity."
+      },
+      listId: {
+        type: "string",
+        description: "ID of destination list to add task to (preferred). Use this instead of newListName if you have it."
+      },
+      newListName: {
+        type: "string",
+        description: "Name of destination list to add task to. Only use if you don't have listId."
+      }
+    },
+    required: []
+  }
+}; 

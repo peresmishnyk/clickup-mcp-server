@@ -1133,3 +1133,67 @@ export async function deleteTaskHandler(params) {
   await taskService.deleteTask(taskId);
   return true;
 } 
+
+/**
+ * Handler for adding a task to an additional list
+ */
+export async function handleAddTaskToList(params: {
+  taskId?: string;
+  taskName?: string;
+  listName?: string;
+  listId?: string;
+  newListName?: string;
+}) {
+  try {
+    // Validate that we have either taskId or taskName
+    if (!params.taskId && !params.taskName) {
+      throw new Error('Either taskId or taskName must be provided');
+    }
+
+    // Validate that we have either listId or newListName for destination
+    if (!params.listId && !params.newListName) {
+      throw new Error('Either listId or newListName must be provided for the destination list');
+    }
+
+    // Get the task ID using existing utility function
+    const taskId = await getTaskId(params.taskId, params.taskName, params.listName);
+
+    // Resolve destination list ID
+    let destinationListId: string;
+    if (params.listId) {
+      destinationListId = params.listId;
+    } else {
+      const listInfo = await findListIDByName(workspaceService, params.newListName!);
+      if (!listInfo) {
+        throw new Error(`Destination list "${params.newListName}" not found`);
+      }
+      destinationListId = listInfo.id;
+    }
+
+    // Call the core service method
+    const result = await taskService.addTaskToList(taskId, destinationListId);
+
+    return result;
+  } catch (error) {
+    // Enhance error messages for better user experience
+    if (error.message?.includes('not found') || error.message?.includes('identify task')) {
+      if (params.taskName) {
+        throw new Error(`Could not find task "${params.taskName}" ${params.listName ? `in list "${params.listName}"` : 'in any list'}`);
+      } else {
+        throw new Error(`Task with ID "${params.taskId}" not found`);
+      }
+    }
+
+    if (error.message?.includes('List') && error.message?.includes('not found')) {
+      throw new Error(`Destination list "${params.newListName || params.listId}" not found`);
+    }
+
+    // Check for specific ClickUp API errors
+    if (error.message?.includes('MULTIPLE_LIST_CLICKAPP_NOT_ENABLED')) {
+      throw new Error('Tasks in Multiple Lists ClickApp must be enabled to use this feature. Please enable it in your ClickUp settings.');
+    }
+
+    // Otherwise, rethrow the original error
+    throw error;
+  }
+} 

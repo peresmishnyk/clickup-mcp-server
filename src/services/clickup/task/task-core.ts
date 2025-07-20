@@ -738,5 +738,50 @@ export class TaskServiceCore extends BaseClickUpService {
     });
     this.logger.debug('Cached task name to ID mapping', { taskName, taskId, listId });
   }
+
+  /**
+   * Add an existing task to an additional list
+   * This creates a multi-list association without moving or duplicating the task
+   * @param taskId The ID of the task to add to the list
+   * @param listId The ID of the list to add the task to
+   * @returns Success confirmation object
+   */
+  async addTaskToList(taskId: string, listId: string): Promise<{ success: boolean; message: string }> {
+    this.logOperation('addTaskToList', { taskId, listId });
+    
+    try {
+      // Validate that both task and list exist
+      await Promise.all([
+        this.validateTaskExists(taskId),
+        this.validateListExists(listId)
+      ]);
+
+      return await this.makeRequest(async () => {
+        const response = await this.client.post(
+          `/list/${listId}/task/${taskId}`,
+          {} // Empty body as per ClickUp API documentation
+        );
+        
+        this.logger.debug('Successfully added task to list', {
+          taskId,
+          listId,
+          responseStatus: response.status
+        });
+        
+        return {
+          success: true,
+          message: `Task ${taskId} successfully added to list ${listId}`
+        };
+      });
+    } catch (error) {
+      this.logger.error('Failed to add task to list', {
+        taskId,
+        listId,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      
+      throw this.handleError(error, `Failed to add task ${taskId} to list ${listId}`);
+    }
+  }
 }
 
