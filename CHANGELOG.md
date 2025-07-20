@@ -2,6 +2,48 @@
 
 ## [Unreleased]
 
+## v1.0.0 (2025-01-27) 🎉
+
+### 🚨 **CRITICAL BUG FIX: Single-List Direct Team API Regression**
+
+- **EMERGENCY HOTFIX**: Fixed critical regression where Single-List queries were incorrectly routed to broken multi-list logic
+- **Root Cause**: v0.9.9 caused ALL `list_ids` requests to route to `getMultiListTasks()`, including single lists
+- **Critical Fix**: Added proper Single-List vs Multi-List routing in `getWorkspaceTasksHandler`
+- **Restored**: Single-List now correctly uses `"Pure Direct Team API (Gemini)"` method
+
+### 🎯 **Enhanced Multi-List Direct Team API Strategy**
+
+- **Independent Parallel Strategy**: v0.9.9 parallel strategy now works correctly for multi-list scenarios
+- **Smart Routing Logic**: Single-List (`list_ids.length === 1`) → Direct Team API, Multi-List → Enhanced Hybrid Discovery
+- **Discovery Method Transparency**: Clear indication of which approach found tasks (`Pure Direct Team API` vs `Enhanced Multi-List`)
+- **Performance Optimization**: Single-List queries no longer go through expensive multi-list hybrid discovery
+
+### 🚀 **Milestone Release Features**
+
+- **Stable Single-List Performance**: Direct Team API for optimal single-list task retrieval
+- **Advanced Multi-List Discovery**: Hybrid approach with Independent Parallel Strategy for complex scenarios
+- **Discovery Transparency**: Detailed metadata showing exactly which API methods were used
+- **Error Recovery**: Robust fallback strategies for API limitations
+
+### 🔧 **Technical Improvements**
+
+- **Critical Routing Fix**: Proper `if (params.list_ids.length === 1)` condition for single-list routing
+- **Handler Logic Enhancement**: `getWorkspaceTasksHandler` now correctly delegates based on list count
+- **Discovery Source Tracking**: Enhanced `_discovery_source` markers for debugging and transparency
+- **Client-Side Filtering**: Proper space/folder filtering for single-list responses
+
+### ⚠️ **Breaking Changes Reverted**
+
+- **Single-List Regression FIXED**: Restored expected `"Pure Direct Team API (Gemini)"` behavior
+- **Performance Regression FIXED**: Single-list queries no longer use expensive multi-list logic
+- **Discovery Method Regression FIXED**: Proper discovery method labels restored
+
+### 📊 **Expected Results After v1.0.0**
+
+- **Single-List**: `"Pure Direct Team API (Gemini)"` with fast performance
+- **Multi-List**: `"Enhanced Multi-List (Hybrid)"` or `"Direct Team API (Independent Parallel Strategy - v0.9.9)"`
+- **Space-based**: `"Fallback Methods + Hybrid Discovery"` for workspace-wide queries
+
 ## v0.9.9 (2025-01-27)
 
 ### 🎯 **CRITICAL BUG FIX: Independent Multi-List Direct Team API Strategy**

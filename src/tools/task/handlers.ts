@@ -810,10 +810,111 @@ export async function getWorkspaceTasksHandler(
 
     // Check if list_ids are provided for enhanced multi-list filtering
     if (params.list_ids && params.list_ids.length > 0) {
+      
+      // CRITICAL FIX v1.0.0: Separate Single-List vs Multi-List routing
+      if (params.list_ids.length === 1) {
+        // Single-List: Use Direct Team API (Gemini Recommendation)
+        const listId = params.list_ids[0];
+        
+        logger.info('Using Single-List Direct Team API (Gemini)', {
+          listId,
+          approach: 'Pure Direct Team API'
+        });
+
+        // Build filters for Direct Team API
+        const directTeamFilters: ExtendedTaskFilters = {
+          subtasks: params.subtasks,
+          include_closed: params.include_closed,
+          archived: params.archived,
+          order_by: params.order_by,
+          reverse: params.reverse,
+          page: params.page,
+          statuses: params.statuses,
+          assignees: params.assignees,
+          date_created_gt: params.date_created_gt,
+          date_created_lt: params.date_created_lt,
+          date_updated_gt: params.date_updated_gt,
+          date_updated_lt: params.date_updated_lt,
+          due_date_gt: params.due_date_gt,
+          due_date_lt: params.due_date_lt,
+          custom_fields: params.custom_fields,
+          tags: params.tags
+        };
+
+        // Use Direct Team API for single list
+        const allTasks = await taskService.getTeamTasksDirectly([listId], directTeamFilters);
+
+        logger.info('Single-List Direct Team API Results', {
+          totalTasksFound: allTasks.length,
+          listId,
+          method: 'Pure Direct Team API (Gemini)'
+        });
+
+        // Apply additional client-side filtering for unsupported filters
+        let filteredTasks = allTasks;
+
+        if (params.folder_ids && params.folder_ids.length > 0) {
+          filteredTasks = filteredTasks.filter(task =>
+            task.folder && params.folder_ids.includes(task.folder.id)
+          );
+        }
+
+        if (params.space_ids && params.space_ids.length > 0) {
+          filteredTasks = filteredTasks.filter(task =>
+            params.space_ids.includes(task.space.id)
+          );
+        }
+
+        // Check token limit and format response
+        const shouldUseSummary = params.detail_level === 'summary' || wouldExceedTokenLimit({ tasks: filteredTasks });
+
+        if (shouldUseSummary) {
+          return {
+            summaries: filteredTasks.map(task => ({
+              id: task.id,
+              name: task.name,
+              status: task.status.status,
+              list: {
+                id: task.list.id,
+                name: task.list.name
+              },
+              locations: task.locations || [],
+              due_date: task.due_date,
+              url: task.url,
+              priority: task.priority?.priority || null,
+              tags: task.tags.map(tag => ({
+                name: tag.name,
+                tag_bg: tag.tag_bg,
+                tag_fg: tag.tag_fg
+              }))
+            })),
+            total_count: filteredTasks.length,
+            has_more: false,
+            next_page: 0,
+            _meta: {
+              discovery_method: 'Pure Direct Team API (Gemini)',
+              phases_used: []
+            }
+          };
+        }
+
+        return {
+          tasks: filteredTasks,
+          total_count: filteredTasks.length,
+          has_more: false,
+          next_page: 0,
+          _meta: {
+            discovery_method: 'Pure Direct Team API (Gemini)',
+            phases_used: []
+          }
+        };
+      }
+
+      // Multi-List: Use Enhanced Multi-List Discovery (Hybrid Approach)
       logger.info('Using Enhanced Multi-List Discovery (Hybrid Approach)', {
         listIds: params.list_ids,
         listCount: params.list_ids.length,
-        approach: 'Views API + Cross-Reference + Relationships'
+        approach: 'Views API + Cross-Reference + Relationships + Independent Parallel Strategy v0.9.9'
       });
 
       // Warning for broad queries
