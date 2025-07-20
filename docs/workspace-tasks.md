@@ -1,4 +1,151 @@
-# get_workspace_tasks
+# Enhanced Multi-List Task Discovery (NEW)
+
+## 🚀 `get_multi_list_tasks` - Advanced Multi-List Task Discovery
+
+**NEW TOOL**: Specifically designed to solve ClickUp's "tasks in multiple lists" visibility problem using a comprehensive 3-phase hybrid approach.
+
+### 🎯 Why This Tool Exists
+
+The standard ClickUp API has a fundamental limitation: tasks added to multiple lists through the "Tasks in Multiple Lists" feature are often not returned by standard list queries. This tool uses advanced discovery techniques to find ALL tasks associated with specified lists.
+
+### 🔍 Discovery Strategy (3-Phase Hybrid Approach)
+
+1. **Views API Phase**: Uses ClickUp's Views API to get tasks visible in list views
+2. **Cross-Reference Phase**: Searches workspace for tasks with target lists in their 'locations' field  
+3. **Relationship Phase**: Finds related tasks through assignee patterns and tag associations
+
+### 📝 Usage Examples
+
+#### Basic Multi-List Discovery
+```json
+{
+  "list_ids": ["901211234743", "901210885565"],
+  "detail_level": "summary"
+}
+```
+
+#### Enhanced Discovery with Filters
+```json
+{
+  "list_ids": ["901211234743"],
+  "assignees": ["42313666"],
+  "statuses": ["in progress", "ready for development"],
+  "tags": ["sprint", "urgent"],
+  "date_updated_gt": 1672531200000,
+  "enable_timing": true,
+  "enable_statistics": true
+}
+```
+
+### 📊 Response Format
+
+#### Summary Response
+```json
+{
+  "summaries": [
+    {
+      "id": "8699rtxt0",
+      "name": "Task Name",
+      "status": "in progress",
+      "list": {
+        "id": "901210885565",
+        "name": "Meets and Events"
+      },
+      "locations": [
+        {
+          "id": "901211234743",
+          "name": "Sprint 57 (7/21 - 8/3)"
+        }
+      ],
+      "due_date": "1753408800000",
+      "url": "https://app.clickup.com/t/8699rtxt0",
+      "priority": "urgent",
+      "tags": [{"name": "sprint", "tag_bg": "#ff0000"}],
+      "assignees": [{"id": "42313666", "username": "dmitriy"}]
+    }
+  ],
+  "total_count": 15,
+  "_meta": {
+    "discovery_method": "Enhanced Multi-List (Hybrid)",
+    "phases_used": ["Views API", "Cross-Reference", "Relationships"],
+    "timing": {
+      "total_ms": 1250
+    },
+    "statistics": {
+      "total_unique_tasks": 15,
+      "lists_searched": 2
+    }
+  }
+}
+```
+
+### 🎛️ Parameters
+
+| Parameter | Type | Description | Required |
+|-----------|------|-------------|----------|
+| `list_ids` | array | Array of list IDs to search for associated tasks | ✅ Yes |
+| `tags` | array | Filter by tag names (enhances relationship discovery) | No |
+| `statuses` | array | Filter by status names | No |
+| `assignees` | array | Filter by assignee IDs (enhances relationship discovery) | No |
+| `date_updated_gt` | number | Filter for tasks updated after timestamp (recommended for performance) | No |
+| `detail_level` | string | "summary" or "detailed" (default: detailed) | No |
+| `enable_timing` | boolean | Include timing statistics in metadata (default: false) | No |
+| `enable_statistics` | boolean | Include discovery statistics in metadata (default: true) | No |
+
+### 🚀 Performance Features
+
+- **Concurrent API calls** for optimal speed
+- **Automatic deduplication** of results
+- **Smart filtering** to minimize API load
+- **Detailed timing and statistics** in response metadata
+- **Token-aware response formatting** (auto-switch to summary if needed)
+
+### 🎯 Use Cases
+
+- **Sprint Planning**: Find all tasks moved from backlogs to sprints
+- **Cross-Team Collaboration**: Discover shared tasks across teams
+- **Project Management**: Tasks spanning multiple workflows
+- **Debugging**: Troubleshoot missing task visibility issues
+- **Reporting**: Complete task coverage across list boundaries
+
+### ⚡ Performance Tips
+
+1. **Use date filters** to limit search scope:
+   ```json
+   {"list_ids": ["123"], "date_updated_gt": 1672531200000}
+   ```
+
+2. **Include assignee/tag filters** for better relationship discovery:
+   ```json
+   {"list_ids": ["123"], "assignees": ["456"], "tags": ["project-x"]}
+   ```
+
+3. **Use summary format** for large datasets:
+   ```json
+   {"list_ids": ["123"], "detail_level": "summary"}
+   ```
+
+### 🔄 Migration from `get_workspace_tasks`
+
+**OLD (limited coverage)**:
+```json
+{"list_ids": ["901211234743"]}
+```
+
+**NEW (comprehensive coverage)**:
+```json
+// Option 1: Use get_multi_list_tasks directly
+{"list_ids": ["901211234743"]}
+
+// Option 2: get_workspace_tasks now uses enhanced discovery automatically
+{"list_ids": ["901211234743"]}
+```
+
+Both `get_workspace_tasks` and `get_multi_list_tasks` now use the same enhanced discovery engine when `list_ids` are provided!
+
+---
+
+# get_workspace_tasks (Enhanced)
 
 The `get_workspace_tasks` tool provides a powerful way to retrieve tasks across the entire workspace with flexible filtering options, including tag-based filtering. This tool is especially useful for cross-list task organization and reporting.
 

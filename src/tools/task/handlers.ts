@@ -808,11 +808,12 @@ export async function getWorkspaceTasksHandler(
       throw new Error('At least one filter parameter is required (tags, list_ids, folder_ids, space_ids, statuses, assignees, or date filters)');
     }
 
-    // Check if list_ids are provided for enhanced filtering via Views API
+    // Check if list_ids are provided for enhanced multi-list filtering
     if (params.list_ids && params.list_ids.length > 0) {
-      logger.info('Using Views API for enhanced list filtering', {
+      logger.info('Using Enhanced Multi-List Discovery (Hybrid Approach)', {
         listIds: params.list_ids,
-        listCount: params.list_ids.length
+        listCount: params.list_ids.length,
+        approach: 'Views API + Cross-Reference + Relationships'
       });
 
       // Warning for broad queries
@@ -827,81 +828,35 @@ export async function getWorkspaceTasksHandler(
         });
       }
 
-      // Use Views API for enhanced list filtering
-      let allTasks: ClickUpTask[] = [];
-      const processedTaskIds = new Set<string>();
+      // Extract filters for the hybrid approach
+      const multiListFilters: ExtendedTaskFilters = {
+        subtasks: params.subtasks,
+        include_closed: params.include_closed,
+        archived: params.archived,
+        order_by: params.order_by,
+        reverse: params.reverse,
+        page: params.page,
+        statuses: params.statuses,
+        assignees: params.assignees,
+        date_created_gt: params.date_created_gt,
+        date_created_lt: params.date_created_lt,
+        date_updated_gt: params.date_updated_gt,
+        date_updated_lt: params.date_updated_lt,
+        due_date_gt: params.due_date_gt,
+        due_date_lt: params.due_date_lt,
+        custom_fields: params.custom_fields,
+        tags: params.tags
+      };
 
-      // Create promises for concurrent fetching
-      const fetchPromises = params.list_ids.map(async (listId: string) => {
-        try {
-          // Get the default list view ID
-          const viewId = await taskService.getListViews(listId);
+      // Use enhanced multi-list task discovery
+      let allTasks = await taskService.getMultiListTasks(params.list_ids, multiListFilters);
 
-          if (!viewId) {
-            logger.warn(`No default view found for list ${listId}, skipping`);
-            return [];
-          }
-
-          // Extract filters supported by the Views API
-          const supportedFilters: ExtendedTaskFilters = {
-            subtasks: params.subtasks,
-            include_closed: params.include_closed,
-            archived: params.archived,
-            order_by: params.order_by,
-            reverse: params.reverse,
-            page: params.page,
-            statuses: params.statuses,
-            assignees: params.assignees,
-            date_created_gt: params.date_created_gt,
-            date_created_lt: params.date_created_lt,
-            date_updated_gt: params.date_updated_gt,
-            date_updated_lt: params.date_updated_lt,
-            due_date_gt: params.due_date_gt,
-            due_date_lt: params.due_date_lt,
-            custom_fields: params.custom_fields
-          };
-
-          // Get tasks from the view
-          const tasksFromView = await taskService.getTasksFromView(viewId, supportedFilters);
-          return tasksFromView;
-
-        } catch (error) {
-          logger.error(`Failed to get tasks from list ${listId}`, { error: error.message });
-          return []; // Continue with other lists even if one fails
-        }
+      logger.info('Enhanced Multi-List Discovery Results', {
+        totalTasksFound: allTasks.length,
+        listIds: params.list_ids
       });
 
-      // Execute all fetches concurrently
-      const taskArrays = await Promise.all(fetchPromises);
-
-      // Aggregate tasks and remove duplicates
-      for (const tasks of taskArrays) {
-        for (const task of tasks) {
-          if (!processedTaskIds.has(task.id)) {
-            allTasks.push(task);
-            processedTaskIds.add(task.id);
-          }
-        }
-      }
-
-      logger.info('Aggregated tasks from Views API', {
-        totalTasks: allTasks.length,
-        uniqueTasks: processedTaskIds.size
-      });
-
-      // Apply client-side filtering for unsupported filters
-      if (params.tags && params.tags.length > 0) {
-        allTasks = allTasks.filter(task =>
-          params.tags.every((tag: string) =>
-            task.tags.some(t => t.name === tag)
-          )
-        );
-        logger.debug('Applied client-side tag filtering', {
-          tags: params.tags,
-          remainingTasks: allTasks.length
-        });
-      }
-
+      // Apply additional client-side filtering for unsupported filters
       if (params.folder_ids && params.folder_ids.length > 0) {
         allTasks = allTasks.filter(task =>
           task.folder && params.folder_ids.includes(task.folder.id)
@@ -926,7 +881,7 @@ export async function getWorkspaceTasksHandler(
       const shouldUseSummary = params.detail_level === 'summary' || wouldExceedTokenLimit({ tasks: allTasks });
 
       if (shouldUseSummary) {
-        logger.info('Using summary format for Views API response', {
+        logger.info('Using summary format for Enhanced Multi-List response', {
           totalTasks: allTasks.length,
           reason: params.detail_level === 'summary' ? 'requested' : 'token_limit'
         });
@@ -940,6 +895,7 @@ export async function getWorkspaceTasksHandler(
               id: task.list.id,
               name: task.list.name
             },
+            locations: task.locations || [], // Include multi-list information
             due_date: task.due_date,
             url: task.url,
             priority: task.priority?.priority || null,
@@ -951,7 +907,11 @@ export async function getWorkspaceTasksHandler(
           })),
           total_count: allTasks.length,
           has_more: false,
-          next_page: 0
+          next_page: 0,
+          _meta: {
+            discovery_method: 'Enhanced Multi-List (Hybrid)',
+            phases_used: ['Views API', 'Cross-Reference', 'Relationships']
+          }
         };
       }
 
@@ -959,7 +919,11 @@ export async function getWorkspaceTasksHandler(
         tasks: allTasks,
         total_count: allTasks.length,
         has_more: false,
-        next_page: 0
+        next_page: 0,
+        _meta: {
+          discovery_method: 'Enhanced Multi-List (Hybrid)',
+          phases_used: ['Views API', 'Cross-Reference', 'Relationships']
+        }
       };
     }
 
@@ -1013,6 +977,134 @@ export async function getWorkspaceTasksHandler(
     return response;
   } catch (error) {
     throw new Error(`Failed to get workspace tasks: ${error.message}`);
+  }
+}
+
+/**
+ * Handler for enhanced multi-list task discovery
+ */
+export async function getMultiListTasksHandler(
+  taskService: TaskService,
+  params: Record<string, any>
+): Promise<Record<string, any>> {
+  try {
+    const startTime = Date.now();
+
+    // Validate required parameters
+    if (!params.list_ids || !Array.isArray(params.list_ids) || params.list_ids.length === 0) {
+      throw new Error('list_ids is required and must be a non-empty array');
+    }
+
+    logger.info('Enhanced Multi-List Task Discovery started', {
+      listIds: params.list_ids,
+      listCount: params.list_ids.length,
+      enableTiming: params.enable_timing || false,
+      enableStatistics: params.enable_statistics !== false // Default to true
+    });
+
+    // Build filters
+    const filters: ExtendedTaskFilters = {
+      tags: params.tags,
+      statuses: params.statuses,
+      assignees: params.assignees,
+      date_updated_gt: params.date_updated_gt,
+      date_updated_lt: params.date_updated_lt,
+      date_created_gt: params.date_created_gt,
+      date_created_lt: params.date_created_lt,
+      due_date_gt: params.due_date_gt,
+      due_date_lt: params.due_date_lt,
+      include_closed: params.include_closed,
+      archived: params.archived,
+      subtasks: params.subtasks,
+      detail_level: params.detail_level || 'detailed'
+    };
+
+    // Use the enhanced multi-list discovery
+    const allTasks = await taskService.getMultiListTasks(params.list_ids, filters);
+
+    const endTime = Date.now();
+    const totalTime = endTime - startTime;
+
+    // Prepare metadata
+    const meta: any = {
+      discovery_method: 'Enhanced Multi-List (Hybrid)',
+      phases_used: ['Views API', 'Cross-Reference', 'Relationships']
+    };
+
+    if (params.enable_timing) {
+      meta.timing = {
+        total_ms: totalTime
+      };
+    }
+
+    if (params.enable_statistics !== false) {
+      meta.statistics = {
+        total_unique_tasks: allTasks.length,
+        lists_searched: params.list_ids.length
+      };
+    }
+
+    // Check if we should use summary format
+    const shouldUseSummary = params.detail_level === 'summary' || wouldExceedTokenLimit({ tasks: allTasks });
+
+    if (shouldUseSummary) {
+      logger.info('Using summary format for Enhanced Multi-List Discovery', {
+        totalTasks: allTasks.length,
+        totalTimeMs: totalTime,
+        reason: params.detail_level === 'summary' ? 'requested' : 'token_limit'
+      });
+
+      return {
+        summaries: allTasks.map(task => ({
+          id: task.id,
+          name: task.name,
+          status: task.status.status,
+          list: {
+            id: task.list.id,
+            name: task.list.name
+          },
+          locations: task.locations || [],
+          due_date: task.due_date,
+          url: task.url,
+          priority: task.priority?.priority || null,
+          tags: task.tags.map(tag => ({
+            name: tag.name,
+            tag_bg: tag.tag_bg,
+            tag_fg: tag.tag_fg
+          })),
+          assignees: task.assignees?.map(assignee => ({
+            id: assignee.id,
+            username: assignee.username,
+            email: assignee.email
+          })) || []
+        })),
+        total_count: allTasks.length,
+        has_more: false,
+        next_page: 0,
+        _meta: meta
+      };
+    }
+
+    logger.info('Enhanced Multi-List Discovery completed', {
+      totalTasks: allTasks.length,
+      totalTimeMs: totalTime,
+      listIds: params.list_ids
+    });
+
+    return {
+      tasks: allTasks,
+      total_count: allTasks.length,
+      has_more: false,
+      next_page: 0,
+      _meta: meta
+    };
+
+  } catch (error) {
+    logger.error('Enhanced Multi-List Discovery failed', {
+      error: error.message,
+      listIds: params.list_ids
+    });
+    throw new Error(`Failed to get multi-list tasks: ${error.message}`);
   }
 }
 

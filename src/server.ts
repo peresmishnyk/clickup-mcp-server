@@ -55,6 +55,7 @@ import {
   handleGetTask,
   handleAttachTaskFile,
   handleGetWorkspaceTasks,
+  handleGetMultiListTasks,
   handleGetTaskTimeEntries,
   handleStartTimeTracking,
   handleStopTimeTracking,
@@ -289,6 +290,8 @@ export function configureServer() {
           return handleDeleteBulkTasks(params);
         case "get_workspace_tasks":
           return handleGetWorkspaceTasks(params);
+        case "get_multi_list_tasks":
+          return handleGetMultiListTasks(params);
         case "create_list":
           return handleCreateList(params);
         case "create_list_in_folder":

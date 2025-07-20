@@ -31,7 +31,8 @@ import {
 } from './bulk-operations.js';
 
 import {
-  getWorkspaceTasksTool
+  getWorkspaceTasksTool,
+  getMultiListTasksTool
 } from './workspace-operations.js';
 
 // Add this to your import statements at the top of the file
@@ -60,6 +61,7 @@ import {
   moveBulkTasksHandler,
   deleteBulkTasksHandler,
   getWorkspaceTasksHandler,
+  getMultiListTasksHandler,
   formatTaskData
 } from './index.js';
 
@@ -183,6 +185,12 @@ export const handleGetWorkspaceTasks = createHandlerWrapper(
   (response) => response // Pass through the response as is
 );
 
+export const handleGetMultiListTasks = createHandlerWrapper(
+  // Enhanced multi-list task discovery with hybrid approach
+  (params) => getMultiListTasksHandler(taskService, params),
+  (response) => response // Pass through the response as is
+);
+
 //=============================================================================
 // TOOL DEFINITIONS AND HANDLERS EXPORT
 //=============================================================================
@@ -228,6 +236,10 @@ export const tools = [
   { 
     definition: getWorkspaceTasksTool, 
     handler: getWorkspaceTasksHandler
+  },
+  { 
+    definition: getMultiListTasksTool, 
+    handler: getMultiListTasksHandler
   },
   { 
     definition: createBulkTasksTool, 

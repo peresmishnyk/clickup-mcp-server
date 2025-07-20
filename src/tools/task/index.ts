@@ -35,7 +35,8 @@ export {
 
 // Re-export workspace task operation tools
 export {
-  getWorkspaceTasksTool
+  getWorkspaceTasksTool,
+  getMultiListTasksTool
 } from './workspace-operations.js';
 
 // Re-export time tracking tools and handlers
@@ -84,7 +85,8 @@ export {
   deleteBulkTasksHandler,
   
   // Team task operation handlers
-  getWorkspaceTasksHandler
+  getWorkspaceTasksHandler,
+  getMultiListTasksHandler
 } from './handlers.js';
 
 // Re-export utilities

@@ -259,3 +259,193 @@ Notes:
     }
   }
 };
+
+/**
+ * Tool definition for enhanced multi-list task discovery
+ */
+export const getMultiListTasksTool = {
+  name: "get_multi_list_tasks",
+  description: `Purpose: Advanced multi-list task discovery using hybrid approach to find ALL tasks associated with specified lists.
+
+This tool is specifically designed to solve ClickUp's "tasks in multiple lists" visibility problem where standard API calls miss tasks that were created in one list but added to another.
+
+Discovery Strategy (3-Phase Hybrid Approach):
+1. **Views API Phase**: Uses ClickUp's Views API to get tasks visible in list views
+2. **Cross-Reference Phase**: Searches workspace for tasks with target lists in their 'locations' field  
+3. **Relationship Phase**: Finds related tasks through assignee patterns and tag associations
+
+Key Benefits:
+- ✅ Finds tasks created elsewhere but added to target lists
+- ✅ Discovers tasks through multi-list associations
+- ✅ Includes comprehensive task metadata (locations, relationships)
+- ✅ Provides detailed discovery statistics and timing
+- ✅ Higher success rate than standard list queries
+
+Use Cases:
+- Sprint planning where tasks are moved between backlogs and sprints
+- Cross-team collaboration with shared tasks
+- Project management with tasks spanning multiple workflows
+- Debugging missing task visibility issues
+
+Requirements:
+- At least one list_id is REQUIRED
+- Works best with additional filters (assignees, tags, dates) for performance
+
+Performance:
+- Concurrent API calls for optimal speed
+- Automatic deduplication of results
+- Smart filtering to minimize API load
+- Detailed timing and statistics in response metadata`,
+  parameters: {
+    type: 'object',
+    required: ['list_ids'],
+    properties: {
+      list_ids: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'REQUIRED: Array of list IDs to search for associated tasks',
+        minItems: 1
+      },
+      tags: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Filter tasks by tag names. Enhances relationship discovery.'
+      },
+      statuses: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Filter tasks by status names (e.g., ["To Do", "In Progress"])'
+      },
+      assignees: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Filter tasks by assignee IDs. Enhances relationship discovery.'
+      },
+      date_updated_gt: {
+        type: 'number',
+        description: 'Filter for tasks updated after this timestamp. Recommended for performance.'
+      },
+      date_updated_lt: {
+        type: 'number',
+        description: 'Filter for tasks updated before this timestamp.'
+      },
+      date_created_gt: {
+        type: 'number',
+        description: 'Filter for tasks created after this timestamp.'
+      },
+      date_created_lt: {
+        type: 'number',
+        description: 'Filter for tasks created before this timestamp.'
+      },
+      due_date_gt: {
+        type: 'number',
+        description: 'Filter for tasks with due date greater than this timestamp.'
+      },
+      due_date_lt: {
+        type: 'number',
+        description: 'Filter for tasks with due date less than this timestamp.'
+      },
+      include_closed: {
+        type: 'boolean',
+        description: 'Include closed/completed tasks in results'
+      },
+      archived: {
+        type: 'boolean',
+        description: 'Include archived tasks in results'
+      },
+      subtasks: {
+        type: 'boolean',
+        description: 'Include subtasks in results (they must still match other filters)'
+      },
+      detail_level: {
+        type: 'string',
+        enum: ['summary', 'detailed'],
+        description: 'Level of detail: "summary" for lightweight data, "detailed" for complete task info. Default: detailed'
+      },
+      enable_timing: {
+        type: 'boolean',
+        description: 'Include detailed timing statistics in response metadata. Default: false'
+      },
+      enable_statistics: {
+        type: 'boolean', 
+        description: 'Include discovery statistics in response metadata. Default: true'
+      }
+    }
+  },
+  inputSchema: {
+    type: 'object',
+    required: ['list_ids'],
+    properties: {
+      list_ids: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'REQUIRED: Array of list IDs to search for associated tasks',
+        minItems: 1
+      },
+      tags: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Filter tasks by tag names. Enhances relationship discovery.'
+      },
+      statuses: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Filter tasks by status names (e.g., ["To Do", "In Progress"])'
+      },
+      assignees: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Filter tasks by assignee IDs. Enhances relationship discovery.'
+      },
+      date_updated_gt: {
+        type: 'number',
+        description: 'Filter for tasks updated after this timestamp. Recommended for performance.'
+      },
+      date_updated_lt: {
+        type: 'number',
+        description: 'Filter for tasks updated before this timestamp.'
+      },
+      date_created_gt: {
+        type: 'number',
+        description: 'Filter for tasks created after this timestamp.'
+      },
+      date_created_lt: {
+        type: 'number',
+        description: 'Filter for tasks created before this timestamp.'
+      },
+      due_date_gt: {
+        type: 'number',
+        description: 'Filter for tasks with due date greater than this timestamp.'
+      },
+      due_date_lt: {
+        type: 'number',
+        description: 'Filter for tasks with due date less than this timestamp.'
+      },
+      include_closed: {
+        type: 'boolean',
+        description: 'Include closed/completed tasks in results'
+      },
+      archived: {
+        type: 'boolean',
+        description: 'Include archived tasks in results'
+      },
+      subtasks: {
+        type: 'boolean',
+        description: 'Include subtasks in results (they must still match other filters)'
+      },
+      detail_level: {
+        type: 'string',
+        enum: ['summary', 'detailed'],
+        description: 'Level of detail: "summary" for lightweight data, "detailed" for complete task info. Default: detailed'
+      },
+      enable_timing: {
+        type: 'boolean',
+        description: 'Include detailed timing statistics in response metadata. Default: false'
+      },
+      enable_statistics: {
+        type: 'boolean', 
+        description: 'Include discovery statistics in response metadata. Default: true'
+      }
+    }
+  }
+};

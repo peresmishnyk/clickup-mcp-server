@@ -1142,5 +1142,235 @@ export class TaskServiceSearch {
       return null;
     }
   }
+
+  /**
+   * Enhanced multi-list task discovery using hybrid approach
+   * Combines Views API, workspace search, and cross-reference detection
+   * @param listIds Array of list IDs to search for associated tasks
+   * @param filters Additional filters to apply
+   * @returns Array of ClickUpTask objects from all sources
+   */
+  async getMultiListTasks(listIds: string[], filters: ExtendedTaskFilters = {}): Promise<ClickUpTask[]> {
+    try {
+      (this.core as any).logOperation('getMultiListTasks', { listIds, filters });
+
+      const allTasks: ClickUpTask[] = [];
+      const processedTaskIds = new Set<string>();
+
+      // Phase 1: Views API approach (existing implementation)
+      const viewsTasks = await this.getTasksFromViews(listIds, filters);
+      this.addUniqueTasksToCollection(viewsTasks, allTasks, processedTaskIds);
+
+      // Phase 2: Cross-reference search in workspace
+      const crossRefTasks = await this.findTasksByLocationsCrossReference(listIds, filters);
+      this.addUniqueTasksToCollection(crossRefTasks, allTasks, processedTaskIds);
+
+      // Phase 3: Direct task relationship analysis
+      const relationshipTasks = await this.findTasksByRelationships(listIds, filters);
+      this.addUniqueTasksToCollection(relationshipTasks, allTasks, processedTaskIds);
+
+      (this.core as any).logOperation('getMultiListTasks', {
+        totalListIds: listIds.length,
+        totalUniqueTasksFound: allTasks.length,
+        viewsTasksFound: viewsTasks.length,
+        crossRefTasksFound: crossRefTasks.length,
+        relationshipTasksFound: relationshipTasks.length
+      });
+
+      return allTasks;
+
+    } catch (error) {
+      (this.core as any).logOperation('getMultiListTasks', {
+        listIds,
+        error: error.message
+      });
+      throw (this.core as any).handleError(error, 'Failed to get multi-list tasks');
+    }
+  }
+
+  /**
+   * Phase 1: Enhanced Views API approach
+   */
+  private async getTasksFromViews(listIds: string[], filters: ExtendedTaskFilters): Promise<ClickUpTask[]> {
+    const allTasks: ClickUpTask[] = [];
+
+    const fetchPromises = listIds.map(async (listId: string) => {
+      try {
+        const viewId = await this.getListViews(listId);
+        if (!viewId) {
+          (this.core as any).logOperation('getTasksFromViews', {
+            listId,
+            warning: 'No default view found for list'
+          });
+          return [];
+        }
+
+        return await this.getTasksFromView(viewId, filters);
+      } catch (error) {
+        (this.core as any).logOperation('getTasksFromViews', {
+          listId,
+          error: error.message
+        });
+        return [];
+      }
+    });
+
+    const taskArrays = await Promise.all(fetchPromises);
+    for (const tasks of taskArrays) {
+      allTasks.push(...tasks);
+    }
+
+    return allTasks;
+  }
+
+  /**
+   * Phase 2: Cross-reference search using workspace endpoint
+   * Searches for tasks that have target lists in their 'locations' field
+   */
+  private async findTasksByLocationsCrossReference(listIds: string[], filters: ExtendedTaskFilters): Promise<ClickUpTask[]> {
+    try {
+      (this.core as any).logOperation('findTasksByLocationsCrossReference', { listIds });
+
+      // Get all workspace tasks with basic filters
+      const workspaceFilters: ExtendedTaskFilters = {
+        ...filters,
+        // Remove list_ids to get broader search
+        list_ids: undefined,
+        // Use date range to limit scope if no other filters provided
+        date_updated_gt: filters.date_updated_gt || Date.now() - (90 * 24 * 60 * 60 * 1000) // Last 90 days
+      };
+
+      const workspaceTasks = await this.getWorkspaceTasks(workspaceFilters);
+      const tasks = 'tasks' in workspaceTasks ? workspaceTasks.tasks : [];
+
+      // Filter tasks that have target lists in their locations
+      const multiListTasks = tasks.filter(task => {
+        if (!task.locations || task.locations.length === 0) {
+          return false;
+        }
+
+        // Check if task has any of our target lists in locations
+        return task.locations.some(location => 
+          listIds.includes(location.id)
+        );
+      });
+
+      (this.core as any).logOperation('findTasksByLocationsCrossReference', {
+        totalWorkspaceTasks: tasks.length,
+        multiListTasksFound: multiListTasks.length,
+        targetListIds: listIds
+      });
+
+      return multiListTasks;
+
+    } catch (error) {
+      (this.core as any).logOperation('findTasksByLocationsCrossReference', {
+        error: error.message
+      });
+      return [];
+    }
+  }
+
+  /**
+   * Phase 3: Direct task relationship analysis
+   * Uses targeted search by assignees and recent activity to find related tasks
+   */
+  private async findTasksByRelationships(listIds: string[], filters: ExtendedTaskFilters): Promise<ClickUpTask[]> {
+    try {
+      (this.core as any).logOperation('findTasksByRelationships', { listIds });
+
+      const relationshipTasks: ClickUpTask[] = [];
+
+      // Strategy 1: Search by assignees who have tasks in target lists
+      if (filters.assignees && filters.assignees.length > 0) {
+        const assigneeTasks = await this.findTasksByAssigneeActivity(filters.assignees, listIds);
+        relationshipTasks.push(...assigneeTasks);
+      }
+
+      // Strategy 2: Search by tags that appear in target lists
+      if (filters.tags && filters.tags.length > 0) {
+        const tagTasks = await this.findTasksByTagsAcrossLists(filters.tags, listIds);
+        relationshipTasks.push(...tagTasks);
+      }
+
+      (this.core as any).logOperation('findTasksByRelationships', {
+        relationshipTasksFound: relationshipTasks.length
+      });
+
+      return relationshipTasks;
+
+    } catch (error) {
+      (this.core as any).logOperation('findTasksByRelationships', {
+        error: error.message
+      });
+      return [];
+    }
+  }
+
+  /**
+   * Find tasks by assignee activity patterns
+   */
+  private async findTasksByAssigneeActivity(assignees: string[], targetListIds: string[]): Promise<ClickUpTask[]> {
+    try {
+      const assigneeTasks = await this.getWorkspaceTasks({
+        assignees,
+        date_updated_gt: Date.now() - (30 * 24 * 60 * 60 * 1000), // Last 30 days
+        include_closed: true
+      });
+
+      const tasks = 'tasks' in assigneeTasks ? assigneeTasks.tasks : [];
+      
+      // Look for tasks that might be related to target lists
+      return tasks.filter(task => {
+        // Check if task has locations pointing to target lists
+        if (task.locations && task.locations.length > 0) {
+          return task.locations.some(location => targetListIds.includes(location.id));
+        }
+        
+        // Additional heuristics could be added here
+        return false;
+      });
+
+    } catch (error) {
+      return [];
+    }
+  }
+
+  /**
+   * Find tasks by tags across lists
+   */
+  private async findTasksByTagsAcrossLists(tags: string[], targetListIds: string[]): Promise<ClickUpTask[]> {
+    try {
+      const tagTasks = await this.getWorkspaceTasks({
+        tags,
+        date_updated_gt: Date.now() - (60 * 24 * 60 * 60 * 1000), // Last 60 days
+        include_closed: true
+      });
+
+      const tasks = 'tasks' in tagTasks ? tagTasks.tasks : [];
+      
+      return tasks.filter(task => {
+        if (task.locations && task.locations.length > 0) {
+          return task.locations.some(location => targetListIds.includes(location.id));
+        }
+        return false;
+      });
+
+    } catch (error) {
+      return [];
+    }
+  }
+
+  /**
+   * Helper to add unique tasks to collection
+   */
+  private addUniqueTasksToCollection(newTasks: ClickUpTask[], collection: ClickUpTask[], processedIds: Set<string>) {
+    for (const task of newTasks) {
+      if (!processedIds.has(task.id)) {
+        collection.push(task);
+        processedIds.add(task.id);
+      }
+    }
+  }
 }
 

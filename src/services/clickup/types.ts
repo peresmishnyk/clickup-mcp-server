@@ -558,23 +558,45 @@ export interface TaskSummary {
 }
 
 /**
- * Response format for detailed task data
+ * Metadata for enhanced multi-list task discovery
+ */
+export interface MultiListDiscoveryMeta {
+  discovery_method: string;
+  phases_used: string[];
+  timing?: {
+    views_api_ms?: number;
+    cross_reference_ms?: number;
+    relationships_ms?: number;
+    total_ms?: number;
+  };
+  statistics?: {
+    views_tasks_found?: number;
+    cross_ref_tasks_found?: number;
+    relationship_tasks_found?: number;
+    duplicates_removed?: number;
+  };
+}
+
+/**
+ * Enhanced response interface for detailed task operations
  */
 export interface DetailedTaskResponse {
   tasks: ClickUpTask[];
   total_count: number;
   has_more: boolean;
   next_page: number;
+  _meta?: MultiListDiscoveryMeta;
 }
 
 /**
- * Response format for task summaries
+ * Enhanced response interface for workspace task summaries
  */
 export interface WorkspaceTasksResponse {
   summaries: TaskSummary[];
   total_count: number;
   has_more: boolean;
   next_page: number;
+  _meta?: MultiListDiscoveryMeta;
 }
 
 /**
