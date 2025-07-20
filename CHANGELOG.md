@@ -2,6 +2,47 @@
 
 ## [Unreleased]
 
+## v0.9.7 (2025-01-27)
+
+### 🎯 **Multi-List Direct Team API Logic Fix & Alternative Strategy**
+
+- **Root Cause Analysis**: Identified that multi-list Direct Team API returns 0 tasks, causing fallback to Views API
+- **Alternative Parallel Strategy**: Always attempt parallel requests for multi-list scenarios as alternative approach
+- **Enhanced Debugging**: Detailed logging before parallel strategy activation to diagnose execution flow  
+- **Smart Decision Logic**: Compare primary vs parallel results and use whichever finds more tasks
+
+### 🚀 **Revolutionary Features**
+
+- **Alternative Parallel Strategy**: ALWAYS tries parallel approach for multi-list in addition to primary approach
+- **Intelligent Result Comparison**: Automatically chooses approach that finds more tasks
+- **Enhanced Discovery Sources**: Better tracking with `direct_team_api_parallel` for parallel results
+- **Deep Debug Logging**: Critical analysis of activation conditions and execution paths
+
+### 🔧 **Technical Improvements**
+
+- **getTeamTasksDirectly**: Added alternative parallel strategy that runs regardless of primary results
+- **Condition Analysis**: Detailed logging of why parallel strategy activates or doesn't activate
+- **Result Comparison**: Smart logic to use parallel results if they find more tasks than primary
+- **Deduplication**: Proper handling of duplicate tasks between different approaches
+
+### 🎯 **What This Solves**
+
+1. **Multi-List Direct Team API**: Should now work via alternative parallel strategy even when primary fails
+2. **Discovery Transparency**: Clear visibility into which approach actually found tasks
+3. **API Limitation Workaround**: Parallel requests when multi-list single request returns 0 tasks
+4. **Performance & Accuracy**: Best of both approaches - use whichever finds more tasks
+
+### 📊 **Expected Behavior Changes**
+
+- Multi-List Discovery should show `"Direct Team API (Parallel Strategy)"` when parallel approach wins
+- Discovery sources will include `direct_team_api_parallel` when parallel approach used
+- Enhanced logging for debugging multi-list API behavior and approach comparison
+- Automatic selection between primary and parallel based on results count
+
+### 🧪 **Experimental Status**
+
+This version introduces alternative parallel strategy that ALWAYS runs for multi-list scenarios. The system automatically chooses between primary multi-list request and parallel individual requests based on which finds more tasks.
+
 ## v0.9.6 (2025-01-27)
 
 ### 🎯 **Multi-List Direct Team API Strategy Revolution**

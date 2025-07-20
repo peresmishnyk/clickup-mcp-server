@@ -140,7 +140,7 @@ const isToolEnabled = (toolName: string): boolean => {
 export const server = new Server(
   {
     name: "clickup-mcp-server",
-    version: "0.9.6",
+    version: "0.9.7",
   },
   {
     capabilities: {

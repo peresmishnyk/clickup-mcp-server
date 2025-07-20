@@ -1340,13 +1340,32 @@ export class TaskServiceSearch {
         _discovery_source: 'direct_team_api'
       }));
 
+      (this.core as any).logOperation('getTeamTasksDirectly', {
+        listIds,
+        criticalAnalysis: 'BEFORE PARALLEL STRATEGY CHECK',
+        conditions: {
+          isMultiList: listIds.length > 1,
+          listIdsCount: listIds.length,
+          tasksFoundCount: tasksWithSource.length,
+          tasksEqualZero: tasksWithSource.length === 0,
+          shouldActivateParallel: listIds.length > 1 && tasksWithSource.length === 0
+        },
+        decision: listIds.length > 1 && tasksWithSource.length === 0 ? 
+          'PARALLEL STRATEGY SHOULD ACTIVATE' : 
+          'PARALLEL STRATEGY WILL NOT ACTIVATE',
+        reason: listIds.length <= 1 ? 'Single list detected' : 
+                tasksWithSource.length > 0 ? 'Tasks found in multi-list request' : 
+                'Unknown reason'
+      });
+
       // EXPERIMENTAL: If multi-list request returned 0 tasks, try parallel strategy
       if (listIds.length > 1 && tasksWithSource.length === 0) {
         (this.core as any).logOperation('getTeamTasksDirectly', {
           listIds,
           experimentalApproach: 'PARALLEL STRATEGY',
           reason: 'Multi-list request returned 0 tasks - trying parallel requests per list_id',
-          strategy: 'Make separate Direct Team API calls for each list_id and combine results'
+          strategy: 'Make separate Direct Team API calls for each list_id and combine results',
+          activationConditions: 'Multi-list AND zero tasks'
         });
 
         try {
@@ -1436,6 +1455,103 @@ export class TaskServiceSearch {
             parallelStrategy: 'FAILED',
             error: `Parallel strategy failed: ${parallelError.message}`,
             fallback: 'Returning original empty result'
+          });
+        }
+      }
+
+      // EXPERIMENTAL v0.9.7: Always try parallel strategy for multi-list as alternative approach
+      if (listIds.length > 1) {
+        (this.core as any).logOperation('getTeamTasksDirectly', {
+          listIds,
+          v097experiment: 'ALTERNATIVE PARALLEL STRATEGY',
+          primaryResults: tasksWithSource.length,
+          reasoning: 'Testing parallel approach for ALL multi-list requests regardless of primary results'
+        });
+
+        try {
+          const alternativeParallelTasks: ClickUpTask[] = [];
+          const alternativePromises = listIds.map(async (singleListId) => {
+            try {
+              const singleListFilters: ExtendedTaskFilters = {
+                ...filters,
+                list_ids: [singleListId]
+              };
+
+              const singleParams = (this.core as any).buildTaskFilterParams(singleListFilters);
+              const singleResponse = await (this.core as any).makeRequest(async () => {
+                return await (this.core as any).client.get(`/team/${(this.core as any).teamId}/task`, {
+                  params: singleParams
+                });
+              });
+
+              const singleTasks = (singleResponse.data.tasks || []).map(task => ({
+                ...task,
+                _discovery_source: 'direct_team_api_parallel'
+              }));
+
+              (this.core as any).logOperation('getTeamTasksDirectly', {
+                v097experiment: true,
+                singleListId,
+                parallelTasksFound: singleTasks.length
+              });
+
+              return singleTasks;
+            } catch (error) {
+              (this.core as any).logOperation('getTeamTasksDirectly', {
+                v097experiment: true,
+                singleListId,
+                error: `Parallel request failed: ${error.message}`
+              });
+              return [];
+            }
+          });
+
+          const alternativeResults = await Promise.all(alternativePromises);
+          const combinedAlternative = alternativeResults.flat();
+          
+          // Deduplicate
+          const uniqueTaskIds = new Set<string>();
+          const uniqueAlternative = combinedAlternative.filter(task => {
+            if (uniqueTaskIds.has(task.id)) {
+              return false;
+            }
+            uniqueTaskIds.add(task.id);
+            return true;
+          });
+
+          (this.core as any).logOperation('getTeamTasksDirectly', {
+            listIds,
+            v097experiment: 'PARALLEL STRATEGY RESULTS',
+            primaryApproach: {
+              tasksFound: tasksWithSource.length,
+              method: 'Multi-list single request'
+            },
+            alternativeApproach: {
+              tasksFound: uniqueAlternative.length,
+              method: 'Parallel individual requests',
+              duplicatesRemoved: combinedAlternative.length - uniqueAlternative.length
+            },
+            decision: uniqueAlternative.length > tasksWithSource.length ? 
+              'Using PARALLEL results (more tasks found)' : 
+              'Using PRIMARY results (equal or more tasks)'
+          });
+
+          // If parallel approach found more tasks, use it
+          if (uniqueAlternative.length > tasksWithSource.length) {
+            (this.core as any).logOperation('getTeamTasksDirectly', {
+              listIds,
+              method: 'Direct Team API SUCCESS (Parallel Strategy)',
+              totalTasksFound: uniqueAlternative.length,
+              note: 'v0.9.7 - Parallel approach found more tasks than primary!'
+            });
+            return uniqueAlternative;
+          }
+
+        } catch (parallelError) {
+          (this.core as any).logOperation('getTeamTasksDirectly', {
+            listIds,
+            v097experiment: 'FAILED',
+            error: `Alternative parallel strategy failed: ${parallelError.message}`
           });
         }
       }
