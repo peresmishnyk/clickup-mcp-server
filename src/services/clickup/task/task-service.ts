@@ -104,6 +104,10 @@ export class TaskService extends TaskServiceCore {
     return this.search.findTasks(params);
   }
 
+  async getMultiListTasks(listIds: string[], filters: ExtendedTaskFilters = {}): Promise<ClickUpTask[]> {
+    return this.search.getMultiListTasks(listIds, filters);
+  }
+
   // ===== DELEGATED ATTACHMENT METHODS =====
 
   async uploadTaskAttachment(taskId: string, fileData: Buffer, fileName: string): Promise<ClickUpTaskAttachment> {
