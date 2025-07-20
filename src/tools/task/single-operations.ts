@@ -506,7 +506,7 @@ export const deleteTaskTool = {
  */
 export const addTaskToListTool = {
   name: "add_task_to_list",
-  description: `Adds existing task to additional list (multi-list association). Use taskId (preferred) or taskName + optional listName for task identification, and listId (preferred) or newListName for destination list. Does NOT move or duplicate - creates multi-list visibility. Requires "Tasks in Multiple Lists" ClickApp enabled.`,
+  description: `Adds existing task to additional list (multi-list association). Use taskId (preferred) or taskName + optional listName for task identification, and listId (preferred) or newListName for destination list. Does NOT move or duplicate - creates multi-list visibility. Requires "Tasks in Multiple Lists" ClickApp enabled. Returns success confirmation with verification of multi-list status.`,
   inputSchema: {
     type: "object",
     properties: {

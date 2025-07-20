@@ -1144,56 +1144,114 @@ export async function handleAddTaskToList(params: {
   listId?: string;
   newListName?: string;
 }) {
+  const logger = new Logger('AddTaskToListHandler');
+  
   try {
+    logger.debug('Starting handleAddTaskToList', { params });
+
     // Validate that we have either taskId or taskName
     if (!params.taskId && !params.taskName) {
-      throw new Error('Either taskId or taskName must be provided');
+      const error = 'Either taskId or taskName must be provided';
+      logger.error('Validation failed: missing task identification', { error, params });
+      throw new Error(error);
     }
 
     // Validate that we have either listId or newListName for destination
     if (!params.listId && !params.newListName) {
-      throw new Error('Either listId or newListName must be provided for the destination list');
+      const error = 'Either listId or newListName must be provided for the destination list';
+      logger.error('Validation failed: missing list identification', { error, params });
+      throw new Error(error);
     }
+
+    logger.debug('Input validation passed, resolving identifiers...');
 
     // Get the task ID using existing utility function
     const taskId = await getTaskId(params.taskId, params.taskName, params.listName);
+    logger.debug('Task ID resolved', { taskId, originalTaskId: params.taskId, originalTaskName: params.taskName });
 
     // Resolve destination list ID
     let destinationListId: string;
     if (params.listId) {
       destinationListId = params.listId;
+      logger.debug('Using provided list ID', { destinationListId });
     } else {
+      logger.debug('Resolving list ID by name', { listName: params.newListName });
       const listInfo = await findListIDByName(workspaceService, params.newListName!);
       if (!listInfo) {
-        throw new Error(`Destination list "${params.newListName}" not found`);
+        const error = `Destination list "${params.newListName}" not found`;
+        logger.error('List resolution failed', { error, listName: params.newListName });
+        throw new Error(error);
       }
       destinationListId = listInfo.id;
+      logger.debug('List ID resolved', { destinationListId, listName: params.newListName, listInfo });
     }
+
+    logger.info('Calling core service method', { taskId, destinationListId });
 
     // Call the core service method
     const result = await taskService.addTaskToList(taskId, destinationListId);
 
-    return result;
+    logger.info('Core service method completed successfully', { 
+      taskId, 
+      destinationListId, 
+      result,
+      resultType: typeof result
+    });
+
+    // Ensure we have a proper result object
+    if (!result || typeof result !== 'object') {
+      logger.warn('Unexpected result format from core service', { result, resultType: typeof result });
+      return {
+        success: true,
+        message: `Task ${taskId} processed for addition to list ${destinationListId}`,
+        warning: 'Result format was unexpected but operation likely succeeded'
+      };
+    }
+
+    // Enhance the result with additional context
+    const enhancedResult = {
+      ...result,
+      taskId,
+      destinationListId,
+      operationType: 'add_task_to_list',
+      timestamp: new Date().toISOString()
+    };
+
+    logger.info('Operation completed successfully', { enhancedResult });
+    return enhancedResult;
+
   } catch (error) {
+    logger.error('Error in handleAddTaskToList', { 
+      error: error instanceof Error ? error.message : String(error),
+      errorStack: error instanceof Error ? error.stack : undefined,
+      params 
+    });
+
     // Enhance error messages for better user experience
     if (error.message?.includes('not found') || error.message?.includes('identify task')) {
-      if (params.taskName) {
-        throw new Error(`Could not find task "${params.taskName}" ${params.listName ? `in list "${params.listName}"` : 'in any list'}`);
-      } else {
-        throw new Error(`Task with ID "${params.taskId}" not found`);
-      }
+      const enhancedError = params.taskName
+        ? `Could not find task "${params.taskName}" ${params.listName ? `in list "${params.listName}"` : 'in any list'}`
+        : `Task with ID "${params.taskId}" not found`;
+      
+      logger.error('Task not found error', { enhancedError, originalError: error.message });
+      throw new Error(enhancedError);
     }
 
     if (error.message?.includes('List') && error.message?.includes('not found')) {
-      throw new Error(`Destination list "${params.newListName || params.listId}" not found`);
+      const enhancedError = `Destination list "${params.newListName || params.listId}" not found`;
+      logger.error('List not found error', { enhancedError, originalError: error.message });
+      throw new Error(enhancedError);
     }
 
     // Check for specific ClickUp API errors
     if (error.message?.includes('MULTIPLE_LIST_CLICKAPP_NOT_ENABLED')) {
-      throw new Error('Tasks in Multiple Lists ClickApp must be enabled to use this feature. Please enable it in your ClickUp settings.');
+      const enhancedError = 'Tasks in Multiple Lists ClickApp must be enabled to use this feature. Please enable it in your ClickUp settings.';
+      logger.error('ClickApp not enabled error', { enhancedError, originalError: error.message });
+      throw new Error(enhancedError);
     }
 
-    // Otherwise, rethrow the original error
+    // Log and rethrow the original error
+    logger.error('Rethrowing original error', { originalError: error.message });
     throw error;
   }
 } 

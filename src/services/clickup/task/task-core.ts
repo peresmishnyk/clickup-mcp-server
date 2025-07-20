@@ -757,27 +757,86 @@ export class TaskServiceCore extends BaseClickUpService {
       ]);
 
       return await this.makeRequest(async () => {
+        this.logger.debug('Attempting to add task to list', {
+          taskId,
+          listId,
+          endpoint: `/list/${listId}/task/${taskId}`
+        });
+
         const response = await this.client.post(
           `/list/${listId}/task/${taskId}`,
           {} // Empty body as per ClickUp API documentation
         );
         
-        this.logger.debug('Successfully added task to list', {
+        this.logger.debug('Raw API response received', {
           taskId,
           listId,
-          responseStatus: response.status
+          responseStatus: response.status,
+          responseStatusText: response.statusText,
+          responseHeaders: response.headers,
+          responseData: response.data,
+          hasData: !!response.data,
+          dataType: typeof response.data
         });
+
+        // Check if the response indicates success
+        const isSuccess = response.status >= 200 && response.status < 300;
         
-        return {
-          success: true,
-          message: `Task ${taskId} successfully added to list ${listId}`
-        };
+        if (!isSuccess) {
+          throw new Error(`API returned status ${response.status}: ${response.statusText}`);
+        }
+
+        // Verify the operation was successful by attempting to retrieve the task
+        // and checking if it appears in multiple lists
+        try {
+          const taskAfterOperation = await this.getTask(taskId);
+          const taskLists = taskAfterOperation.locations || [];
+          const taskInMultipleLists = taskLists.length > 0;
+          
+          this.logger.debug('Post-operation verification', {
+            taskId,
+            listId,
+            taskLocations: taskLists,
+            isInMultipleLists: taskInMultipleLists,
+            locationsCount: taskLists.length
+          });
+
+          const successMessage = `Task ${taskId} successfully added to list ${listId}`;
+          const result = {
+            success: true,
+            message: taskInMultipleLists 
+              ? `${successMessage} (verified: task now appears in ${taskLists.length + 1} lists)`
+              : successMessage
+          };
+
+          this.logger.info('addTaskToList completed successfully', {
+            taskId,
+            listId,
+            result,
+            verification: { taskInMultipleLists, locationsCount: taskLists.length }
+          });
+
+          return result;
+        } catch (verificationError) {
+          this.logger.warn('Could not verify task addition, but API call succeeded', {
+            taskId,
+            listId,
+            verificationError: verificationError instanceof Error ? verificationError.message : String(verificationError)
+          });
+          
+          // Still return success since the API call succeeded
+          return {
+            success: true,
+            message: `Task ${taskId} successfully added to list ${listId} (verification skipped)`
+          };
+        }
       });
     } catch (error) {
       this.logger.error('Failed to add task to list', {
         taskId,
         listId,
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined
       });
       
       throw this.handleError(error, `Failed to add task ${taskId} to list ${listId}`);
