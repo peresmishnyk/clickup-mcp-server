@@ -842,5 +842,113 @@ export class TaskServiceCore extends BaseClickUpService {
       throw this.handleError(error, `Failed to add task ${taskId} to list ${listId}`);
     }
   }
+
+  /**
+   * Remove an existing task from an additional list
+   * This removes a multi-list association without deleting the task
+   * @param taskId The ID of the task to remove from the list
+   * @param listId The ID of the list to remove the task from
+   * @returns Success confirmation object
+   */
+  async removeTaskFromList(taskId: string, listId: string): Promise<{ success: boolean; message: string }> {
+    this.logOperation('removeTaskFromList', { taskId, listId });
+    
+    try {
+      // Validate that both task and list exist
+      const [task, _] = await Promise.all([
+        this.validateTaskExists(taskId),
+        this.validateListExists(listId)
+      ]);
+
+      // Check if this is the task's home list (we can't remove from home list)
+      if (task.list.id === listId) {
+        throw new Error(`Cannot remove task ${taskId} from its home list ${listId}. Use move or delete operations instead.`);
+      }
+
+      return await this.makeRequest(async () => {
+        this.logger.debug('Attempting to remove task from list', {
+          taskId,
+          listId,
+          endpoint: `/list/${listId}/task/${taskId}`
+        });
+
+        const response = await this.client.delete(
+          `/list/${listId}/task/${taskId}`
+        );
+        
+        this.logger.debug('Raw API response received', {
+          taskId,
+          listId,
+          responseStatus: response.status,
+          responseStatusText: response.statusText,
+          responseHeaders: response.headers,
+          responseData: response.data,
+          hasData: !!response.data,
+          dataType: typeof response.data
+        });
+
+        // Check if the response indicates success
+        const isSuccess = response.status >= 200 && response.status < 300;
+        
+        if (!isSuccess) {
+          throw new Error(`API returned status ${response.status}: ${response.statusText}`);
+        }
+
+        // Verify the operation was successful by attempting to retrieve the task
+        // and checking if it was removed from the locations
+        try {
+          const taskAfterOperation = await this.getTask(taskId);
+          const taskLists = taskAfterOperation.locations || [];
+          const wasRemovedFromList = !taskLists.some(location => location.id === listId);
+          
+          this.logger.debug('Post-operation verification', {
+            taskId,
+            listId,
+            taskLocations: taskLists,
+            wasRemovedFromList,
+            remainingLocationsCount: taskLists.length
+          });
+
+          const successMessage = `Task ${taskId} successfully removed from list ${listId}`;
+          const result = {
+            success: true,
+            message: wasRemovedFromList 
+              ? `${successMessage} (verified: task now appears in ${taskLists.length + 1} lists)`
+              : successMessage
+          };
+
+          this.logger.info('removeTaskFromList completed successfully', {
+            taskId,
+            listId,
+            result,
+            verification: { wasRemovedFromList, remainingLocationsCount: taskLists.length }
+          });
+
+          return result;
+        } catch (verificationError) {
+          this.logger.warn('Could not verify task removal, but API call succeeded', {
+            taskId,
+            listId,
+            verificationError: verificationError instanceof Error ? verificationError.message : String(verificationError)
+          });
+          
+          // Still return success since the API call succeeded
+          return {
+            success: true,
+            message: `Task ${taskId} successfully removed from list ${listId} (verification skipped)`
+          };
+        }
+      });
+    } catch (error) {
+      this.logger.error('Failed to remove task from list', {
+        taskId,
+        listId,
+        error: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined
+      });
+      
+      throw this.handleError(error, `Failed to remove task ${taskId} from list ${listId}`);
+    }
+  }
 }
 

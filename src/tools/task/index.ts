@@ -21,7 +21,8 @@ export {
   deleteTaskTool,
   getTaskCommentsTool,
   createTaskCommentTool,
-  addTaskToListTool
+  addTaskToListTool,
+  removeTaskFromListTool
 } from './single-operations.js';
 
 // Re-export bulk task operation tools
@@ -74,6 +75,7 @@ export {
   getTaskCommentsHandler,
   createTaskCommentHandler,
   handleAddTaskToList,
+  handleRemoveTaskFromList,
   
   // Bulk task operation handlers
   createBulkTasksHandler,

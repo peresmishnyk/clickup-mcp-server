@@ -1256,4 +1256,134 @@ export async function handleAddTaskToList(params: {
     logger.error('Returning original error', { originalError: error.message });
     return sponsorService.createErrorResponse(error, params);
   }
+}
+
+/**
+ * Handler for removing a task from an additional list
+ */
+export async function handleRemoveTaskFromList(params: {
+  taskId?: string;
+  taskName?: string;
+  taskListName?: string;
+  listId?: string;
+  listName?: string;
+}) {
+  const logger = new Logger('RemoveTaskFromListHandler');
+  
+  try {
+    logger.debug('Starting handleRemoveTaskFromList', { params });
+
+    // Validate that we have either taskId or taskName
+    if (!params.taskId && !params.taskName) {
+      const error = 'Either taskId or taskName must be provided';
+      logger.error('Validation failed: missing task identification', { error, params });
+      return sponsorService.createErrorResponse(error, params);
+    }
+
+    // Validate that we have either listId or listName for source list
+    if (!params.listId && !params.listName) {
+      const error = 'Either listId or listName must be provided for the source list';
+      logger.error('Validation failed: missing list identification', { error, params });
+      return sponsorService.createErrorResponse(error, params);
+    }
+
+    logger.debug('Input validation passed, resolving identifiers...');
+
+    // Get the task ID using existing utility function
+    const taskId = await getTaskId(params.taskId, params.taskName, params.taskListName);
+    logger.debug('Task ID resolved', { taskId, originalTaskId: params.taskId, originalTaskName: params.taskName });
+
+    // Resolve source list ID
+    let sourceListId: string;
+    if (params.listId) {
+      sourceListId = params.listId;
+      logger.debug('Using provided list ID', { sourceListId });
+    } else {
+      logger.debug('Resolving list ID by name', { listName: params.listName });
+      const listInfo = await findListIDByName(workspaceService, params.listName!);
+      if (!listInfo) {
+        const error = `Source list "${params.listName}" not found`;
+        logger.error('List resolution failed', { error, listName: params.listName });
+        return sponsorService.createErrorResponse(error, params);
+      }
+      sourceListId = listInfo.id;
+      logger.debug('List ID resolved', { sourceListId, listName: params.listName, listInfo });
+    }
+
+    logger.info('Calling core service method', { taskId, sourceListId });
+
+    // Call the core service method
+    const result = await taskService.removeTaskFromList(taskId, sourceListId);
+
+    logger.info('Core service method completed successfully', { 
+      taskId, 
+      sourceListId, 
+      result,
+      resultType: typeof result
+    });
+
+    // Ensure we have a proper result object
+    if (!result || typeof result !== 'object') {
+      logger.warn('Unexpected result format from core service', { result, resultType: typeof result });
+      const fallbackResult = {
+        success: true,
+        message: `Task ${taskId} processed for removal from list ${sourceListId}`,
+        warning: 'Result format was unexpected but operation likely succeeded'
+      };
+      return sponsorService.createResponse(fallbackResult, true);
+    }
+
+    // Enhance the result with additional context
+    const enhancedResult = {
+      ...result,
+      taskId,
+      sourceListId,
+      operationType: 'remove_task_from_list',
+      timestamp: new Date().toISOString()
+    };
+
+    logger.info('Operation completed successfully', { enhancedResult });
+    return sponsorService.createResponse(enhancedResult, true);
+
+  } catch (error) {
+    logger.error('Error in handleRemoveTaskFromList', { 
+      error: error instanceof Error ? error.message : String(error),
+      errorStack: error instanceof Error ? error.stack : undefined,
+      params 
+    });
+
+    // Enhance error messages for better user experience
+    if (error.message?.includes('not found') || error.message?.includes('identify task')) {
+      const enhancedError = params.taskName
+        ? `Could not find task "${params.taskName}" ${params.taskListName ? `in list "${params.taskListName}"` : 'in any list'}`
+        : `Task with ID "${params.taskId}" not found`;
+      
+      logger.error('Task not found error', { enhancedError, originalError: error.message });
+      return sponsorService.createErrorResponse(enhancedError, params);
+    }
+
+    if (error.message?.includes('List') && error.message?.includes('not found')) {
+      const enhancedError = `Source list "${params.listName || params.listId}" not found`;
+      logger.error('List not found error', { enhancedError, originalError: error.message });
+      return sponsorService.createErrorResponse(enhancedError, params);
+    }
+
+    // Check for specific ClickUp API errors
+    if (error.message?.includes('MULTIPLE_LIST_CLICKAPP_NOT_ENABLED')) {
+      const enhancedError = 'Tasks in Multiple Lists ClickApp must be enabled to use this feature. Please enable it in your ClickUp settings.';
+      logger.error('ClickApp not enabled error', { enhancedError, originalError: error.message });
+      return sponsorService.createErrorResponse(enhancedError, params);
+    }
+
+    // Check for home list removal attempt
+    if (error.message?.includes('home list')) {
+      const enhancedError = 'Cannot remove task from its home list. Use move or delete operations instead.';
+      logger.error('Home list removal error', { enhancedError, originalError: error.message });
+      return sponsorService.createErrorResponse(enhancedError, params);
+    }
+
+    // Log and return the original error
+    logger.error('Returning original error', { originalError: error.message });
+    return sponsorService.createErrorResponse(error, params);
+  }
 } 

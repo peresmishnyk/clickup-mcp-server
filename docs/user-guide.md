@@ -66,6 +66,8 @@ For detailed SSE setup instructions, see [SSE Transport Documentation](sse-trans
 | move_task | Move task to another list | Either `taskId` or `taskName`, and either `listId` or `listName` | `sourceListName` |
 | move_bulk_tasks | Move multiple tasks | `tasks[]` with task identifiers, and target list | None |
 | duplicate_task | Copy task to another list | Either `taskId` or `taskName`, and either `listId` or `listName` | `sourceListName` |
+| add_task_to_list | Add task to additional list (multi-list) | Either `taskId` or `taskName`, and either `listId` or `newListName` | `listName` (for task disambiguation) |
+| remove_task_from_list | Remove task from additional list | Either `taskId` or `taskName`, and either `listId` or `listName` | `taskListName` (for task disambiguation) |
 | get_workspace_tasks | Retrieve tasks across the workspace with enhanced filtering | At least one filter parameter (tags, list_ids, folder_ids, space_ids, statuses, assignees, or date filters) | page, order_by, reverse, detail_level, subtasks |
 
 ### Task Parameters

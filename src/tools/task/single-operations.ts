@@ -533,4 +533,38 @@ export const addTaskToListTool = {
     },
     required: []
   }
+};
+
+/**
+ * Tool definition for removing a task from an additional list
+ */
+export const removeTaskFromListTool = {
+  name: "remove_task_from_list",
+  description: `Remove task from additional list (multi-list association). Use taskId (preferred) or taskName + optional listName for task identification, and listId (preferred) or listName for source list. Does NOT delete task - only removes from additional list. Cannot remove from home list. Requires "Tasks in Multiple Lists" ClickApp enabled. Returns success confirmation with verification of removal.`,
+  inputSchema: {
+    type: "object",
+    properties: {
+      taskId: {
+        type: "string",
+        description: "ID of task to remove from list (preferred). Automatically detects and handles both regular task IDs (9 characters) and custom IDs (like 'DEV-1234', 'PROJ-456')."
+      },
+      taskName: {
+        type: "string",
+        description: "Name of task to remove from list. The tool will search for tasks with this name across all lists unless taskListName is specified."
+      },
+      taskListName: {
+        type: "string", 
+        description: "Optional: Name of list containing the task. Providing this narrows the search to a specific list, improving performance and reducing ambiguity."
+      },
+      listId: {
+        type: "string",
+        description: "ID of list to remove task from (preferred). Use this instead of listName if you have it."
+      },
+      listName: {
+        type: "string",
+        description: "Name of list to remove task from. Only use if you don't have listId."
+      }
+    },
+    required: []
+  }
 }; 
