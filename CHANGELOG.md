@@ -2,6 +2,43 @@
 
 ## [Unreleased]
 
+## v0.9.5 (2025-01-27)
+
+### 🎯 **Enhanced Multi-List Discovery Diagnostics**
+
+- **Detailed Debug Logging**: Added comprehensive diagnostics for Direct Team API behavior
+- **Discovery Source Tracking**: Enhanced `_discovery_source` markers for all API methods
+- **Intelligent Metadata**: Discovery methods now accurately reflect actual API usage
+- **Fallback Chain Visibility**: Clear tracking of which APIs were used (Direct Team → Views → Direct List)
+
+### 🔧 **Critical Improvements**
+
+- **getTeamTasksDirectly**: Added detailed parameter tracking and response analysis
+- **getTasksFromViews**: Enhanced fallback chain with proper source markers
+- **handlers.ts**: Intelligent discovery method detection based on actual API sources
+- **Error Diagnostics**: Comprehensive logging for debugging API failures
+
+### 🚀 **New Features**
+
+- **Multi-Source Analysis**: Tracks tasks from different API sources in single response
+- **Fallback Transparency**: Shows exactly which method found tasks (Gemini vs Views vs Direct List)
+- **Performance Insights**: Detailed timing and success metrics for each discovery phase
+- **API Debugging**: Enhanced error messages with status codes, URLs, and possible causes
+
+### 🎯 **What This Fixes**
+
+1. **Multi-List Metadata**: Now shows correct discovery method instead of hardcoded "Views API"
+2. **Debug Visibility**: Detailed logs for troubleshooting why Direct Team API returns 0 tasks
+3. **Source Attribution**: Each task tagged with exact API source for transparency
+4. **Intelligent Fallbacks**: System shows which methods actually contributed to results
+
+### 📊 **Expected Behavior Changes**
+
+- `get_multi_list_tasks` metadata will show actual methods used
+- Discovery sources: `direct_team_api`, `views_api_fallback`, `direct_list_api_fallback`
+- Enhanced logging for diagnosing Multi-List Discovery issues
+- More accurate representation of API method success/failure
+
 ## v0.9.4 (2025-01-27)
 
 ### 🔧 **Critical Bug Fixes**

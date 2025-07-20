@@ -1247,7 +1247,13 @@ export class TaskServiceSearch {
       (this.core as any).logOperation('getTeamTasksDirectly', { 
         listIds, 
         filters,
-        method: 'Pure Team API - Gemini Recommendation'
+        method: 'Pure Team API - Gemini Recommendation',
+        diagnostics: {
+          teamId: (this.core as any).teamId,
+          listIdsCount: listIds.length,
+          endpoint: `/team/${(this.core as any).teamId}/task`,
+          listIdsParam: `list_ids[]=${listIds.join('&list_ids[]=')}`
+        }
       });
 
       // Build filters for team endpoint
@@ -1258,6 +1264,14 @@ export class TaskServiceSearch {
 
       // Use direct team endpoint call
       const params = (this.core as any).buildTaskFilterParams(teamFilters);
+      
+      (this.core as any).logOperation('getTeamTasksDirectly', {
+        listIds,
+        parametersBuilt: true,
+        paramsObject: Object.fromEntries(params.entries()),
+        aboutToMakeRequest: true
+      });
+
       const response = await (this.core as any).makeRequest(async () => {
         return await (this.core as any).client.get(`/team/${(this.core as any).teamId}/task`, {
           params
@@ -1265,6 +1279,18 @@ export class TaskServiceSearch {
       });
 
       const tasks = response.data.tasks || [];
+
+      (this.core as any).logOperation('getTeamTasksDirectly', {
+        listIds,
+        responseReceived: true,
+        responseStatus: response.status,
+        responseTasksCount: tasks.length,
+        responseDataKeys: Object.keys(response.data || {}),
+        apiLimitInfo: {
+          totalTasks: response.data.total_count || 'N/A',
+          hasMore: response.data.has_more || false
+        }
+      });
 
       // Add discovery source marker for tracking
       const tasksWithSource = tasks.map(task => ({
@@ -1275,7 +1301,7 @@ export class TaskServiceSearch {
       (this.core as any).logOperation('getTeamTasksDirectly', {
         listIds,
         totalTasksFound: tasksWithSource.length,
-        method: 'Direct Team API Success',
+        method: tasksWithSource.length > 0 ? 'Direct Team API SUCCESS' : 'Direct Team API returned ZERO tasks',
         endpoint: `/team/${(this.core as any).teamId}/task`,
         listIdsParam: `list_ids[]=${listIds.join('&list_ids[]=')}`
       });
@@ -1349,34 +1375,69 @@ export class TaskServiceSearch {
       (this.core as any).logOperation('getTasksFromViews', {
         listIds,
         method: 'Direct Team API (Gemini recommendation)',
-        phase: 'Phase 1 - Primary approach'
+        phase: 'Phase 1 - Primary approach',
+        teamId: (this.core as any).teamId,
+        endpoint: `/team/${(this.core as any).teamId}/task?list_ids[]=${listIds.join('&list_ids[]=')}`
       });
 
       const teamTasks = await this.getTeamTasksDirectly(listIds, filters);
+      
+      (this.core as any).logOperation('getTasksFromViews', {
+        listIds,
+        method: 'Direct Team API Response Analysis',
+        tasksFoundCount: teamTasks.length,
+        hasDiscoverySourceMarker: teamTasks.length > 0 ? (teamTasks[0] as any)._discovery_source : 'N/A',
+        taskDetails: teamTasks.length > 0 ? {
+          firstTaskId: teamTasks[0].id,
+          firstTaskName: teamTasks[0].name,
+          firstTaskListId: teamTasks[0].list?.id
+        } : 'No tasks returned'
+      });
+
       if (teamTasks.length > 0) {
         (this.core as any).logOperation('getTasksFromViews', {
           listIds,
-          method: 'Direct Team API SUCCESS',
+          method: 'Direct Team API SUCCESS - returning tasks with discovery source tracking',
           tasksFound: teamTasks.length,
-          result: 'Found tasks with Direct Team API - multi-list tasks included!'
+          result: 'Found tasks with Direct Team API - multi-list tasks included!',
+          discoverySourceCheck: teamTasks.every(task => (task as any)._discovery_source === 'direct_team_api')
         });
         return teamTasks;
       }
 
       (this.core as any).logOperation('getTasksFromViews', {
         listIds,
-        warning: 'Direct Team API returned no tasks, trying Views API fallback'
+        warning: 'Direct Team API returned ZERO tasks - investigating why',
+        possibleCauses: [
+          'Lists exist but contain no tasks',
+          'API permissions insufficient', 
+          'List IDs invalid or inaccessible',
+          'Team ID mismatch',
+          'Filters too restrictive'
+        ],
+        fallback: 'Proceeding to Views API fallback'
       });
 
     } catch (error) {
       (this.core as any).logOperation('getTasksFromViews', {
         listIds,
-        error: `Direct Team API failed: ${error.message}`,
+        error: `Direct Team API FAILED with error: ${error.message}`,
+        errorDetails: {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          url: error.config?.url
+        },
         fallback: 'Trying Views API + Direct List API fallback'
       });
     }
 
     // FALLBACK: Original Views API + Direct List API approach
+    (this.core as any).logOperation('getTasksFromViews', {
+      listIds,
+      phase: 'FALLBACK Phase - Views API + Direct List API',
+      reason: 'Direct Team API returned 0 tasks or failed'
+    });
+
     const fetchPromises = listIds.map(async (listId: string) => {
       try {
         // Try Views API first
@@ -1387,9 +1448,15 @@ export class TaskServiceSearch {
             (this.core as any).logOperation('getTasksFromViews', {
               listId,
               method: 'Views API (fallback)',
-              tasksFound: viewTasks.length
+              tasksFound: viewTasks.length,
+              addingDiscoverySourceMarkers: true
             });
-            return viewTasks;
+            
+            // Add fallback discovery source markers
+            return viewTasks.map(task => ({
+              ...task,
+              _discovery_source: 'views_api_fallback'
+            }));
           }
         }
 
@@ -1399,36 +1466,27 @@ export class TaskServiceSearch {
           warning: 'Views API failed, trying Direct List API final fallback'
         });
 
-        // Convert ExtendedTaskFilters to basic TaskFilters for Direct List API
-        const basicFilters: any = {};
-        if (filters.include_closed !== undefined) basicFilters.include_closed = filters.include_closed;
-        if (filters.archived !== undefined) basicFilters.archived = filters.archived;
-        if (filters.page !== undefined) basicFilters.page = filters.page;
-        if (filters.order_by) basicFilters.order_by = filters.order_by;
-        if (filters.reverse !== undefined) basicFilters.reverse = filters.reverse;
-        if (filters.subtasks !== undefined) basicFilters.subtasks = filters.subtasks;
-        if (filters.statuses && filters.statuses.length > 0) basicFilters.statuses = filters.statuses;
-        if (filters.assignees && filters.assignees.length > 0) basicFilters.assignees = filters.assignees;
-        if (filters.date_created_gt) basicFilters.date_created_gt = filters.date_created_gt;
-        if (filters.date_created_lt) basicFilters.date_created_lt = filters.date_created_lt;
-        if (filters.date_updated_gt) basicFilters.date_updated_gt = filters.date_updated_gt;
-        if (filters.date_updated_lt) basicFilters.date_updated_lt = filters.date_updated_lt;
-        if (filters.due_date_gt) basicFilters.due_date_gt = filters.due_date_gt;
-        if (filters.due_date_lt) basicFilters.due_date_lt = filters.due_date_lt;
+        const directListTasks = await (this.core as any).getTasks(listId, filters);
+        if (directListTasks.length > 0) {
+          (this.core as any).logOperation('getTasksFromViews', {
+            listId,
+            method: 'Direct List API (final fallback)', 
+            tasksFound: directListTasks.length,
+            addingDiscoverySourceMarkers: true
+          });
+          
+          // Add final fallback discovery source markers
+          return directListTasks.map(task => ({
+            ...task,
+            _discovery_source: 'direct_list_api_fallback'
+          }));
+        }
 
-        const directTasks = await (this.core as any).getTasks(listId, basicFilters);
-        (this.core as any).logOperation('getTasksFromViews', {
-          listId,
-          method: 'Direct List API (final fallback)',
-          tasksFound: directTasks.length
-        });
-        return directTasks;
-
+        return [];
       } catch (error) {
         (this.core as any).logOperation('getTasksFromViews', {
           listId,
-          error: error.message,
-          allFallbacksAttempted: true
+          error: `All fallback methods failed: ${error.message}`
         });
         return [];
       }

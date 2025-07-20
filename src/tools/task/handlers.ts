@@ -862,17 +862,51 @@ export async function getWorkspaceTasksHandler(
       
       // Analyze task sources to determine actual discovery method used
       if (allTasks.length > 0) {
-        // Check if tasks came from Direct Team API (Gemini recommendation)
-        const hasTeamApiTasks = allTasks.some(task => (task as any)._discovery_source === 'direct_team_api');
-        if (hasTeamApiTasks) {
+        // Check for different discovery sources
+        const directTeamApiTasks = allTasks.filter(task => (task as any)._discovery_source === 'direct_team_api');
+        const viewsApiFallbackTasks = allTasks.filter(task => (task as any)._discovery_source === 'views_api_fallback');
+        const directListApiFallbackTasks = allTasks.filter(task => (task as any)._discovery_source === 'direct_list_api_fallback');
+        const untaggedTasks = allTasks.filter(task => !(task as any)._discovery_source);
+
+        logger.info('Discovery Source Analysis', {
+          totalTasks: allTasks.length,
+          directTeamApiTasks: directTeamApiTasks.length,
+          viewsApiFallbackTasks: viewsApiFallbackTasks.length,
+          directListApiFallbackTasks: directListApiFallbackTasks.length,
+          untaggedTasks: untaggedTasks.length
+        });
+
+        // Determine primary discovery method
+        if (directTeamApiTasks.length > 0) {
           phasesUsed.push('Direct Team API (Gemini)');
           discoveryMethod = 'Direct Team API + Hybrid Fallback';
-        } else {
+        }
+        
+        if (viewsApiFallbackTasks.length > 0) {
           phasesUsed.push('Views API');
         }
         
-        // Always include other phases for hybrid approach
+        if (directListApiFallbackTasks.length > 0) {
+          phasesUsed.push('Direct List API');
+        }
+
+        // If no specific source found, assume Views API (legacy behavior)
+        if (phasesUsed.length === 0) {
+          phasesUsed.push('Views API');
+        }
+        
+        // Always include other hybrid phases
         phasesUsed.push('Cross-Reference', 'Relationships');
+
+        // Update discovery method based on what was actually used
+        if (directTeamApiTasks.length === allTasks.length) {
+          discoveryMethod = 'Pure Direct Team API (Gemini)';
+        } else if (directTeamApiTasks.length > 0) {
+          discoveryMethod = 'Direct Team API + Hybrid Fallback';
+        } else if (viewsApiFallbackTasks.length > 0 || directListApiFallbackTasks.length > 0) {
+          discoveryMethod = 'Fallback Methods + Hybrid Discovery';
+        }
+
       } else {
         // No tasks found, but still ran all phases
         phasesUsed.push('Direct Team API (Gemini)', 'Views API', 'Cross-Reference', 'Relationships');
