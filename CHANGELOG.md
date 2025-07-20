@@ -2,6 +2,36 @@
 
 ## [Unreleased]
 
+## v1.0.1 (2025-01-27)
+
+### 🎯 **Independent Parallel Strategy Discovery Method Fix**
+
+- **ROOT CAUSE FOUND**: Independent Parallel Strategy was working but metadata in handlers.js didn't display correct discovery method
+- **Critical Fix**: Added v1.0.1 force debug markers (`_v101_force_debug`, `_discovery_method_override`) for visibility  
+- **Enhanced Discovery Method Detection**: handlers.js now correctly shows `"Direct Team API (Independent Parallel Strategy v1.0.1)"`
+- **Improved Debugging**: Force debug tracking for Independent Parallel Strategy activation and results
+
+### 🚀 **Enhanced Discovery Transparency**
+
+- **Force Debug Markers**: Tasks returned by Independent Parallel Strategy now include visibility markers
+- **Discovery Method Override**: Automatic detection when Independent Parallel Strategy is used
+- **Enhanced Metadata**: Clear indication when multi-list tasks found via Independent Parallel Strategy  
+- **TypeScript Fix**: Corrected const/let issue for phasesUsed array in discovery method determination
+
+### 🔧 **Technical Improvements**
+
+- **Visibility Enhancement**: Independent Parallel Strategy results now properly tracked in metadata
+- **Debug Information**: Detailed tracking of primary vs parallel task counts
+- **Discovery Source Enhancement**: Better tracking with `direct_team_api_parallel_v099` detection  
+- **Metadata Accuracy**: Discovery method now accurately reflects actual API usage
+
+### 🎯 **What This Fixes**
+
+- **Discovery Method Transparency**: Multi-list discovery now correctly shows when Independent Parallel Strategy is used
+- **Debugging Visibility**: Clear tracking of Independent Parallel Strategy activation and success  
+- **API Method Attribution**: Accurate indication of which approach found tasks
+- **Result Verification**: Force debug markers ensure Independent Parallel Strategy results are visible
+
 ## v1.0.0 (2025-01-27) 🎉
 
 ### 🚨 **CRITICAL BUG FIX: Single-List Direct Team API Regression**

@@ -1596,9 +1596,24 @@ export class TaskServiceSearch {
               bugFixed: 'Alternative strategy was nested inside first strategy in v0.9.8',
               reasonUsed: tasksWithSource.length === 0 ? 
                 'Primary returned zero, independent parallel found tasks' :
-                'Independent parallel found more tasks than primary'
+                'Independent parallel found more tasks than primary',
+              v101forceDebug: 'FORCE RETURN - Testing Independent Parallel Strategy activation',
+              debugInfo: {
+                primaryTasksCount: tasksWithSource.length,
+                parallelTasksCount: uniqueAlternative.length,
+                returningTasks: uniqueAlternative.length,
+                discoverySource: 'direct_team_api_parallel_v099'
+              }
             });
-            return uniqueAlternative;
+            
+            // v1.0.1 FORCE DEBUG: Add additional tracking for discovery source visibility
+            const trackedResults = uniqueAlternative.map(task => ({
+              ...task,
+              _v101_force_debug: true,
+              _discovery_method_override: 'Independent Parallel Strategy v1.0.1'
+            }));
+            
+            return trackedResults;
           }
 
           (this.core as any).logOperation('getTeamTasksDirectly', {
