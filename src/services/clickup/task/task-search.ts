@@ -156,74 +156,165 @@ export class TaskServiceSearch {
     try {
       (this.core as any).logOperation('getWorkspaceTasks', { filters });
 
-      const params = (this.core as any).buildTaskFilterParams(filters);
-      const response = await (this.core as any).makeRequest(async () => {
-        return await (this.core as any).client.get(`/team/${(this.core as any).teamId}/task`, {
-          params
+      // Strategy 1: Try direct team endpoint (may fail with certain filter combinations)
+      try {
+        const params = (this.core as any).buildTaskFilterParams(filters);
+        const response = await (this.core as any).makeRequest(async () => {
+          return await (this.core as any).client.get(`/team/${(this.core as any).teamId}/task`, {
+            params
+          });
         });
-      });
 
-      const tasks = response.data.tasks;
-      const totalCount = tasks.length; // Note: This is just the current page count
-      const hasMore = totalCount === 100; // ClickUp returns max 100 tasks per page
-      const nextPage = (filters.page || 0) + 1;
+        const tasks = response.data.tasks;
+        const totalCount = tasks.length;
+        const hasMore = totalCount === 100;
+        const nextPage = (filters.page || 0) + 1;
 
-      // If the estimated token count exceeds 50,000 or detail_level is 'summary',
-      // return summary format for efficiency and to avoid hitting token limits
-      const TOKEN_LIMIT = 50000;
-      
-      // Estimate tokens for the full response
-      let tokensExceedLimit = false;
-      
-      if (filters.detail_level !== 'summary' && tasks.length > 0) {
-        // We only need to check token count if detailed was requested
-        // For summary requests, we always return summary format
+        (this.core as any).logOperation('getWorkspaceTasks', {
+          method: 'Direct team endpoint SUCCESS',
+          totalTasks: totalCount
+        });
+
+        // Continue with existing logic...
+        const TOKEN_LIMIT = 50000;
         
-        // First check with a sample task - if one task exceeds the limit, we definitely need summary
-        const sampleTask = tasks[0];
+        // Estimate tokens for the full response
+        let tokensExceedLimit = false;
         
-        // Check if all tasks would exceed the token limit
-        const estimatedTokensPerTask = (this.core as any).estimateTaskTokens(sampleTask);
-        const estimatedTotalTokens = estimatedTokensPerTask * tasks.length;
-        
-        // Add 10% overhead for the response wrapper
-        tokensExceedLimit = estimatedTotalTokens * 1.1 > TOKEN_LIMIT;
-        
-        // Double-check with more precise estimation if we're close to the limit
-        if (!tokensExceedLimit && estimatedTotalTokens * 1.1 > TOKEN_LIMIT * 0.8) {
-          // More precise check - build a representative sample and extrapolate
-          tokensExceedLimit = wouldExceedTokenLimit(
-            { tasks, total_count: totalCount, has_more: hasMore, next_page: nextPage },
-            TOKEN_LIMIT
-          );
+        if (filters.detail_level !== 'summary' && tasks.length > 0) {
+          // We only need to check token count if detailed was requested
+          // For summary requests, we always return summary format
+          
+          // First check with a sample task - if one task exceeds the limit, we definitely need summary
+          const sampleTask = tasks[0];
+          
+          // Check if all tasks would exceed the token limit
+          const estimatedTokensPerTask = (this.core as any).estimateTaskTokens(sampleTask);
+          const estimatedTotalTokens = estimatedTokensPerTask * tasks.length;
+          
+          // Add 10% overhead for the response wrapper
+          tokensExceedLimit = estimatedTotalTokens * 1.1 > TOKEN_LIMIT;
+          
+          // Double-check with more precise estimation if we're close to the limit
+          if (!tokensExceedLimit && estimatedTotalTokens * 1.1 > TOKEN_LIMIT * 0.8) {
+            // More precise check - build a representative sample and extrapolate
+            tokensExceedLimit = wouldExceedTokenLimit(
+              { tasks, total_count: totalCount, has_more: hasMore, next_page: nextPage },
+              TOKEN_LIMIT
+            );
+          }
         }
-      }
 
-      // Determine if we should return summary or detailed based on request and token limit
-      const shouldUseSummary = filters.detail_level === 'summary' || tokensExceedLimit;
+        // Determine if we should return summary or detailed based on request and token limit
+        const shouldUseSummary = filters.detail_level === 'summary' || tokensExceedLimit;
 
-      (this.core as any).logOperation('getWorkspaceTasks', {
-        totalTasks: tasks.length,
-        estimatedTokens: tasks.reduce((count, task) => count + (this.core as any).estimateTaskTokens(task), 0),
-        usingDetailedFormat: !shouldUseSummary,
-        requestedFormat: filters.detail_level || 'auto'
-      });
+        (this.core as any).logOperation('getWorkspaceTasks', {
+          totalTasks: tasks.length,
+          estimatedTokens: tasks.reduce((count, task) => count + (this.core as any).estimateTaskTokens(task), 0),
+          usingDetailedFormat: !shouldUseSummary,
+          requestedFormat: filters.detail_level || 'auto'
+        });
 
-      if (shouldUseSummary) {
+        if (shouldUseSummary) {
+          return {
+            summaries: tasks.map(task => (this.core as any).formatTaskSummary(task)),
+            total_count: totalCount,
+            has_more: hasMore,
+            next_page: nextPage
+          };
+        }
+
         return {
-          summaries: tasks.map(task => (this.core as any).formatTaskSummary(task)),
+          tasks,
           total_count: totalCount,
           has_more: hasMore,
           next_page: nextPage
         };
-      }
+             } catch (error) {
+         (this.core as any).logOperation('getWorkspaceTasks', { 
+           error: error.message, 
+           status: error.response?.status,
+           fallback: 'Attempting space-based list discovery'
+         });
 
-      return {
-        tasks,
-        total_count: totalCount,
-        has_more: hasMore,
-        next_page: nextPage
-      };
+         // Strategy 2: Fallback for space_ids - get lists in spaces and search them directly
+         if (filters.space_ids && filters.space_ids.length > 0) {
+           try {
+             const allTasks: ClickUpTask[] = [];
+             
+             for (const spaceId of filters.space_ids) {
+               try {
+                 // Get lists in this space
+                 const spaceLists = await (this.core as any).workspaceService.getListsInSpace(spaceId);
+                 
+                 // Search each list directly (limit to avoid rate limits)
+                 for (const list of spaceLists.slice(0, 20)) {
+                   try {
+                     // Convert to basic filters for direct list API
+                     const basicFilters: any = {};
+                     if (filters.include_closed !== undefined) basicFilters.include_closed = filters.include_closed;
+                     if (filters.archived !== undefined) basicFilters.archived = filters.archived;
+                     if (filters.statuses && filters.statuses.length > 0) basicFilters.statuses = filters.statuses;
+                     if (filters.assignees && filters.assignees.length > 0) basicFilters.assignees = filters.assignees;
+
+                     const listTasks = await (this.core as any).getTasks(list.id, basicFilters);
+                     allTasks.push(...listTasks);
+                   } catch (listError) {
+                     // Continue with other lists if one fails
+                     (this.core as any).logOperation('getWorkspaceTasks', {
+                       listId: list.id,
+                       warning: 'Failed to get tasks from list in space fallback'
+                     });
+                   }
+                 }
+               } catch (spaceError) {
+                 (this.core as any).logOperation('getWorkspaceTasks', {
+                   spaceId,
+                   warning: 'Failed to get lists for space in fallback'
+                 });
+               }
+             }
+
+             if (allTasks.length > 0) {
+               (this.core as any).logOperation('getWorkspaceTasks', {
+                 method: 'Space-based fallback SUCCESS',
+                 totalTasks: allTasks.length
+               });
+
+               return {
+                                   summaries: allTasks.map(task => ({
+                    id: task.id,
+                    name: task.name,
+                    status: task.status?.status || 'unknown',
+                    list: {
+                      id: task.list?.id || '',
+                      name: task.list?.name || ''
+                    },
+                    due_date: task.due_date,
+                    url: task.url,
+                                         priority: task.priority?.orderindex ? parseInt(task.priority.orderindex, 10) : null,
+                    tags: (task.tags || []).map(tag => ({
+                      name: tag.name,
+                      tag_bg: tag.tag_bg,
+                      tag_fg: tag.tag_fg
+                    }))
+                  })),
+                 total_count: allTasks.length,
+                 has_more: false,
+                 next_page: 0
+               };
+             }
+           } catch (fallbackError) {
+             (this.core as any).logOperation('getWorkspaceTasks', {
+               error: 'Space-based fallback failed',
+               fallbackError: fallbackError.message
+             });
+           }
+         }
+
+         // If all fallbacks failed, re-throw the original error
+         throw (this.core as any).handleError(error, 'Failed to get workspace tasks with all strategies');
+       }
     } catch (error) {
       (this.core as any).logOperation('getWorkspaceTasks', { error: error.message, status: error.response?.status });
       throw (this.core as any).handleError(error, 'Failed to get workspace tasks');
@@ -1175,15 +1266,21 @@ export class TaskServiceSearch {
 
       const tasks = response.data.tasks || [];
 
+      // Add discovery source marker for tracking
+      const tasksWithSource = tasks.map(task => ({
+        ...task,
+        _discovery_source: 'direct_team_api'
+      }));
+
       (this.core as any).logOperation('getTeamTasksDirectly', {
         listIds,
-        totalTasksFound: tasks.length,
+        totalTasksFound: tasksWithSource.length,
         method: 'Direct Team API Success',
         endpoint: `/team/${(this.core as any).teamId}/task`,
         listIdsParam: `list_ids[]=${listIds.join('&list_ids[]=')}`
       });
 
-      return tasks;
+      return tasksWithSource;
 
     } catch (error) {
       (this.core as any).logOperation('getTeamTasksDirectly', {

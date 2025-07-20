@@ -856,6 +856,28 @@ export async function getWorkspaceTasksHandler(
         listIds: params.list_ids
       });
 
+      // Determine which phases were actually used based on task sources
+      const phasesUsed: string[] = [];
+      let discoveryMethod = 'Enhanced Multi-List (Hybrid)';
+      
+      // Analyze task sources to determine actual discovery method used
+      if (allTasks.length > 0) {
+        // Check if tasks came from Direct Team API (Gemini recommendation)
+        const hasTeamApiTasks = allTasks.some(task => (task as any)._discovery_source === 'direct_team_api');
+        if (hasTeamApiTasks) {
+          phasesUsed.push('Direct Team API (Gemini)');
+          discoveryMethod = 'Direct Team API + Hybrid Fallback';
+        } else {
+          phasesUsed.push('Views API');
+        }
+        
+        // Always include other phases for hybrid approach
+        phasesUsed.push('Cross-Reference', 'Relationships');
+      } else {
+        // No tasks found, but still ran all phases
+        phasesUsed.push('Direct Team API (Gemini)', 'Views API', 'Cross-Reference', 'Relationships');
+      }
+
       // Apply additional client-side filtering for unsupported filters
       if (params.folder_ids && params.folder_ids.length > 0) {
         allTasks = allTasks.filter(task =>
@@ -909,8 +931,8 @@ export async function getWorkspaceTasksHandler(
           has_more: false,
           next_page: 0,
           _meta: {
-            discovery_method: 'Enhanced Multi-List (Hybrid)',
-            phases_used: ['Views API', 'Cross-Reference', 'Relationships']
+            discovery_method: discoveryMethod,
+            phases_used: phasesUsed
           }
         };
       }
@@ -921,8 +943,8 @@ export async function getWorkspaceTasksHandler(
         has_more: false,
         next_page: 0,
         _meta: {
-          discovery_method: 'Enhanced Multi-List (Hybrid)',
-          phases_used: ['Views API', 'Cross-Reference', 'Relationships']
+          discovery_method: discoveryMethod,
+          phases_used: phasesUsed
         }
       };
     }

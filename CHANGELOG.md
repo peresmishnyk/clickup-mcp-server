@@ -2,6 +2,35 @@
 
 ## [Unreleased]
 
+## v0.9.4 (2025-01-27)
+
+### 🔧 **Critical Bug Fixes**
+
+- **Fixed Static Metadata**: Replaced hardcoded "Views API" metadata with dynamic discovery method tracking
+- **Added Discovery Source Tracking**: Tasks now marked with `_discovery_source` to track actual API used
+- **Workspace API Fallback**: Added space-based list discovery fallback for failed space_ids filters
+- **Type Safety**: Fixed TaskSummary priority type conversion (string to number)
+
+### 🚀 **Improvements**
+
+- **Dynamic Phases Logging**: `phases_used` now reflects actual discovery methods attempted
+- **Enhanced Error Handling**: Better fallback strategies when primary methods fail
+- **Space Discovery**: When space_ids fail, automatically searches all lists in specified spaces
+- **Rate Limit Protection**: Limited concurrent space searches to avoid API throttling
+
+### 🎯 **What This Fixes**
+
+1. **Metadata Accuracy**: Discovery method now shows "Direct Team API + Hybrid Fallback" when Gemini method works
+2. **Space Filtering**: Attempts to make space_ids filter work through direct list enumeration
+3. **Debugging**: Better visibility into which discovery phases actually ran vs failed
+
+### 📊 **Current Status**
+
+- Multi-list task discovery: ✅ Working (found 2 examples)
+- Direct Team API: ⚠️ Needs verification if being used as primary
+- Workspace space_ids: ⚠️ Still investigating API limitations
+- Dynamic metadata: ✅ Implemented (pending testing)
+
 ## v0.9.3 (2025-01-27)
 
 ### 🎯 **Gemini AI Recommendation Implementation**
