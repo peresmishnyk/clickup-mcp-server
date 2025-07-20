@@ -1251,10 +1251,34 @@ export class TaskServiceSearch {
         diagnostics: {
           teamId: (this.core as any).teamId,
           listIdsCount: listIds.length,
+          isSingleList: listIds.length === 1,
+          isMultiList: listIds.length > 1,
           endpoint: `/team/${(this.core as any).teamId}/task`,
           listIdsParam: `list_ids[]=${listIds.join('&list_ids[]=')}`
         }
       });
+
+      // DIAGNOSTIC: Try different strategies for multi-list vs single-list
+      if (listIds.length > 1) {
+        (this.core as any).logOperation('getTeamTasksDirectly', {
+          listIds,
+          approach: 'MULTI-LIST STRATEGY',
+          strategy: 'Single request with multiple list_ids[] parameters',
+          concern: 'This might be the root cause of 0 results',
+          alternativeStrategies: [
+            'Parallel requests per list_id',
+            'Different parameter format',
+            'Different ClickUp API endpoint'
+          ]
+        });
+      } else {
+        (this.core as any).logOperation('getTeamTasksDirectly', {
+          listIds,
+          approach: 'SINGLE-LIST STRATEGY',
+          strategy: 'Single request with single list_ids[] parameter',
+          note: 'This approach works reliably'
+        });
+      }
 
       // Build filters for team endpoint
       const teamFilters: ExtendedTaskFilters = {
@@ -1269,7 +1293,13 @@ export class TaskServiceSearch {
         listIds,
         parametersBuilt: true,
         paramsObject: Object.fromEntries(params.entries()),
-        aboutToMakeRequest: true
+        aboutToMakeRequest: true,
+        criticalAnalysis: {
+          listIdsInParams: params.getAll('list_ids[]'),
+          listIdsCount: params.getAll('list_ids[]').length,
+          expectedListIds: listIds,
+          parameterFormatCorrect: JSON.stringify(params.getAll('list_ids[]')) === JSON.stringify(listIds)
+        }
       });
 
       const response = await (this.core as any).makeRequest(async () => {
@@ -1289,6 +1319,18 @@ export class TaskServiceSearch {
         apiLimitInfo: {
           totalTasks: response.data.total_count || 'N/A',
           hasMore: response.data.has_more || false
+        },
+        multiListAnalysis: listIds.length > 1 ? {
+          expectedBehavior: 'Should return tasks from ALL specified lists',
+          actualResult: tasks.length > 0 ? 'SUCCESS - tasks found' : 'FAILURE - no tasks returned',
+          possibleCauses: tasks.length === 0 ? [
+            'ClickUp API does not support multiple list_ids[] in single request',
+            'Parameter format incorrect for multi-list',
+            'Team permissions insufficient for cross-list queries',
+            'API limitation requiring separate requests per list'
+          ] : []
+        } : {
+          singleListNote: 'Single list query - working as expected'
         }
       });
 
@@ -1297,6 +1339,106 @@ export class TaskServiceSearch {
         ...task,
         _discovery_source: 'direct_team_api'
       }));
+
+      // EXPERIMENTAL: If multi-list request returned 0 tasks, try parallel strategy
+      if (listIds.length > 1 && tasksWithSource.length === 0) {
+        (this.core as any).logOperation('getTeamTasksDirectly', {
+          listIds,
+          experimentalApproach: 'PARALLEL STRATEGY',
+          reason: 'Multi-list request returned 0 tasks - trying parallel requests per list_id',
+          strategy: 'Make separate Direct Team API calls for each list_id and combine results'
+        });
+
+        try {
+          const parallelTasks: ClickUpTask[] = [];
+          const parallelPromises = listIds.map(async (singleListId) => {
+            try {
+              (this.core as any).logOperation('getTeamTasksDirectly', {
+                parallelRequest: true,
+                singleListId,
+                approach: 'Individual list request within parallel strategy'
+              });
+
+              const singleListFilters: ExtendedTaskFilters = {
+                ...filters,
+                list_ids: [singleListId] // Single list in array
+              };
+
+              const singleParams = (this.core as any).buildTaskFilterParams(singleListFilters);
+              const singleResponse = await (this.core as any).makeRequest(async () => {
+                return await (this.core as any).client.get(`/team/${(this.core as any).teamId}/task`, {
+                  params: singleParams
+                });
+              });
+
+              const singleTasks = (singleResponse.data.tasks || []).map(task => ({
+                ...task,
+                _discovery_source: 'direct_team_api_parallel'
+              }));
+
+              (this.core as any).logOperation('getTeamTasksDirectly', {
+                parallelRequest: true,
+                singleListId,
+                tasksFound: singleTasks.length,
+                result: singleTasks.length > 0 ? 'SUCCESS' : 'No tasks in this list'
+              });
+
+              return singleTasks;
+            } catch (error) {
+              (this.core as any).logOperation('getTeamTasksDirectly', {
+                parallelRequest: true,
+                singleListId,
+                error: `Parallel request failed: ${error.message}`
+              });
+              return [];
+            }
+          });
+
+          const parallelResults = await Promise.all(parallelPromises);
+          
+          // Combine and deduplicate results
+          const combinedTasks = parallelResults.flat();
+          const uniqueTaskIds = new Set<string>();
+          const uniqueTasks = combinedTasks.filter(task => {
+            if (uniqueTaskIds.has(task.id)) {
+              return false;
+            }
+            uniqueTaskIds.add(task.id);
+            return true;
+          });
+
+          (this.core as any).logOperation('getTeamTasksDirectly', {
+            listIds,
+            parallelStrategy: 'COMPLETED',
+            individualResults: parallelResults.map((tasks, index) => ({
+              listId: listIds[index],
+              tasksFound: tasks.length
+            })),
+            combinedTasksCount: combinedTasks.length,
+            uniqueTasksCount: uniqueTasks.length,
+            duplicatesRemoved: combinedTasks.length - uniqueTasks.length,
+            finalResult: uniqueTasks.length > 0 ? 'PARALLEL STRATEGY SUCCESS' : 'PARALLEL STRATEGY ALSO RETURNED 0 TASKS'
+          });
+
+          if (uniqueTasks.length > 0) {
+            (this.core as any).logOperation('getTeamTasksDirectly', {
+              listIds,
+              method: 'Direct Team API SUCCESS (Parallel Strategy)',
+              totalTasksFound: uniqueTasks.length,
+              note: 'Multi-list single request failed, but parallel requests succeeded!'
+            });
+            return uniqueTasks;
+          }
+
+        } catch (parallelError) {
+          (this.core as any).logOperation('getTeamTasksDirectly', {
+            listIds,
+            parallelStrategy: 'FAILED',
+            error: `Parallel strategy failed: ${parallelError.message}`,
+            fallback: 'Returning original empty result'
+          });
+        }
+      }
 
       (this.core as any).logOperation('getTeamTasksDirectly', {
         listIds,

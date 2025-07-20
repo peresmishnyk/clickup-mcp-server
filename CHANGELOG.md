@@ -2,6 +2,47 @@
 
 ## [Unreleased]
 
+## v0.9.6 (2025-01-27)
+
+### 🎯 **Multi-List Direct Team API Strategy Revolution**
+
+- **Root Cause Analysis**: Deep diagnostics for single vs multi-list Direct Team API behavior
+- **Parallel Strategy**: Experimental parallel requests fallback for multi-list scenarios  
+- **Enhanced Discovery Sources**: New `direct_team_api_parallel` tracking for parallel requests
+- **Intelligent Metadata**: Advanced discovery method detection for mixed strategies
+
+### 🚀 **Revolutionary Features**
+
+- **Multi-List Parameter Analysis**: Detailed logging of parameter formatting and API responses
+- **Parallel Request Fallback**: When multi-list single request fails, automatically tries parallel approach
+- **Deduplication Logic**: Smart combination of parallel results with duplicate removal
+- **Strategy Attribution**: Clear tracking of which approach found tasks (single vs parallel)
+
+### 🔧 **Technical Improvements**
+
+- **getTeamTasksDirectly**: Added multi-list vs single-list strategy analysis
+- **Parallel Execution**: Concurrent requests per list_id with result combination
+- **Discovery Source Expansion**: Support for `direct_team_api_parallel` source tracking
+- **Metadata Intelligence**: Advanced discovery method detection for mixed strategies
+
+### 🎯 **What This Solves**
+
+1. **Multi-List Direct Team API**: Should now work via parallel strategy if single request fails
+2. **ClickUp API Limitations**: Workaround for potential multi-list parameter issues
+3. **Discovery Transparency**: Clear visibility into which strategy actually worked
+4. **Performance Optimization**: Parallel requests instead of sequential fallbacks
+
+### 📊 **Expected Behavior Changes**
+
+- Multi-List Discovery may show `"Direct Team API (Parallel Strategy)"` in metadata
+- Discovery sources include: `direct_team_api`, `direct_team_api_parallel`
+- Enhanced logging for troubleshooting multi-list API behavior
+- Automatic fallback from single multi-list request to parallel individual requests
+
+### 🧪 **Experimental Status**
+
+This version introduces experimental parallel strategy. If multi-list single request continues to fail, the system will automatically attempt parallel requests per list_id and combine results.
+
 ## v0.9.5 (2025-01-27)
 
 ### 🎯 **Enhanced Multi-List Discovery Diagnostics**

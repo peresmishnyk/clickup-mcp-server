@@ -864,6 +864,7 @@ export async function getWorkspaceTasksHandler(
       if (allTasks.length > 0) {
         // Check for different discovery sources
         const directTeamApiTasks = allTasks.filter(task => (task as any)._discovery_source === 'direct_team_api');
+        const directTeamApiParallelTasks = allTasks.filter(task => (task as any)._discovery_source === 'direct_team_api_parallel');
         const viewsApiFallbackTasks = allTasks.filter(task => (task as any)._discovery_source === 'views_api_fallback');
         const directListApiFallbackTasks = allTasks.filter(task => (task as any)._discovery_source === 'direct_list_api_fallback');
         const untaggedTasks = allTasks.filter(task => !(task as any)._discovery_source);
@@ -871,15 +872,26 @@ export async function getWorkspaceTasksHandler(
         logger.info('Discovery Source Analysis', {
           totalTasks: allTasks.length,
           directTeamApiTasks: directTeamApiTasks.length,
+          directTeamApiParallelTasks: directTeamApiParallelTasks.length,
           viewsApiFallbackTasks: viewsApiFallbackTasks.length,
           directListApiFallbackTasks: directListApiFallbackTasks.length,
           untaggedTasks: untaggedTasks.length
         });
 
         // Determine primary discovery method
-        if (directTeamApiTasks.length > 0) {
-          phasesUsed.push('Direct Team API (Gemini)');
-          discoveryMethod = 'Direct Team API + Hybrid Fallback';
+        const totalDirectTeamApiTasks = directTeamApiTasks.length + directTeamApiParallelTasks.length;
+        
+        if (totalDirectTeamApiTasks > 0) {
+          if (directTeamApiTasks.length > 0 && directTeamApiParallelTasks.length > 0) {
+            phasesUsed.push('Direct Team API (Gemini + Parallel)');
+            discoveryMethod = 'Direct Team API (Mixed Strategy)';
+          } else if (directTeamApiParallelTasks.length > 0) {
+            phasesUsed.push('Direct Team API (Parallel Strategy)');
+            discoveryMethod = 'Direct Team API (Parallel Strategy)';
+          } else {
+            phasesUsed.push('Direct Team API (Gemini)');
+            discoveryMethod = 'Direct Team API + Hybrid Fallback';
+          }
         }
         
         if (viewsApiFallbackTasks.length > 0) {
@@ -899,10 +911,18 @@ export async function getWorkspaceTasksHandler(
         phasesUsed.push('Cross-Reference', 'Relationships');
 
         // Update discovery method based on what was actually used
-        if (directTeamApiTasks.length === allTasks.length) {
-          discoveryMethod = 'Pure Direct Team API (Gemini)';
-        } else if (directTeamApiTasks.length > 0) {
-          discoveryMethod = 'Direct Team API + Hybrid Fallback';
+        if (totalDirectTeamApiTasks === allTasks.length) {
+          if (directTeamApiParallelTasks.length > 0) {
+            discoveryMethod = 'Pure Direct Team API (Parallel Strategy)';
+          } else {
+            discoveryMethod = 'Pure Direct Team API (Gemini)';
+          }
+        } else if (totalDirectTeamApiTasks > 0) {
+          if (directTeamApiParallelTasks.length > 0) {
+            discoveryMethod = 'Direct Team API (Parallel) + Hybrid Fallback';
+          } else {
+            discoveryMethod = 'Direct Team API + Hybrid Fallback';
+          }
         } else if (viewsApiFallbackTasks.length > 0 || directListApiFallbackTasks.length > 0) {
           discoveryMethod = 'Fallback Methods + Hybrid Discovery';
         }
