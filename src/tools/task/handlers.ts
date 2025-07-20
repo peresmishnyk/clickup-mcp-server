@@ -862,70 +862,45 @@ export async function getWorkspaceTasksHandler(
       
       // Analyze task sources to determine actual discovery method used
       if (allTasks.length > 0) {
-        // Check for different discovery sources
+        // Check for different discovery sources - v0.9.9 Enhanced
         const directTeamApiTasks = allTasks.filter(task => (task as any)._discovery_source === 'direct_team_api');
         const directTeamApiParallelTasks = allTasks.filter(task => (task as any)._discovery_source === 'direct_team_api_parallel');
+        const directTeamApiParallelV099Tasks = allTasks.filter(task => (task as any)._discovery_source === 'direct_team_api_parallel_v099');
         const viewsApiFallbackTasks = allTasks.filter(task => (task as any)._discovery_source === 'views_api_fallback');
         const directListApiFallbackTasks = allTasks.filter(task => (task as any)._discovery_source === 'direct_list_api_fallback');
         const untaggedTasks = allTasks.filter(task => !(task as any)._discovery_source);
 
-        logger.info('Discovery Source Analysis', {
+        logger.info('Discovery Source Analysis v0.9.9', {
           totalTasks: allTasks.length,
           directTeamApiTasks: directTeamApiTasks.length,
           directTeamApiParallelTasks: directTeamApiParallelTasks.length,
+          directTeamApiParallelV099Tasks: directTeamApiParallelV099Tasks.length,
           viewsApiFallbackTasks: viewsApiFallbackTasks.length,
           directListApiFallbackTasks: directListApiFallbackTasks.length,
           untaggedTasks: untaggedTasks.length
         });
 
-        // Determine primary discovery method
-        const totalDirectTeamApiTasks = directTeamApiTasks.length + directTeamApiParallelTasks.length;
-        
-        if (totalDirectTeamApiTasks > 0) {
-          if (directTeamApiTasks.length > 0 && directTeamApiParallelTasks.length > 0) {
-            phasesUsed.push('Direct Team API (Gemini + Parallel)');
-            discoveryMethod = 'Direct Team API (Mixed Strategy)';
-          } else if (directTeamApiParallelTasks.length > 0) {
-            phasesUsed.push('Direct Team API (Parallel Strategy)');
-            discoveryMethod = 'Direct Team API (Parallel Strategy)';
-          } else {
-            phasesUsed.push('Direct Team API (Gemini)');
-            discoveryMethod = 'Direct Team API + Hybrid Fallback';
-          }
-        }
-        
-        if (viewsApiFallbackTasks.length > 0) {
-          phasesUsed.push('Views API');
-        }
-        
-        if (directListApiFallbackTasks.length > 0) {
-          phasesUsed.push('Direct List API');
-        }
+        // v0.9.9 Enhanced Discovery Method Determination
+        let discoveryMethod = 'Unknown';
+        let phasesUsed: string[] = [];
 
-        // If no specific source found, assume Views API (legacy behavior)
-        if (phasesUsed.length === 0) {
-          phasesUsed.push('Views API');
-        }
-        
-        // Always include other hybrid phases
-        phasesUsed.push('Cross-Reference', 'Relationships');
-
-        // Update discovery method based on what was actually used
-        if (totalDirectTeamApiTasks === allTasks.length) {
-          if (directTeamApiParallelTasks.length > 0) {
-            discoveryMethod = 'Pure Direct Team API (Parallel Strategy)';
-          } else {
-            discoveryMethod = 'Pure Direct Team API (Gemini)';
-          }
-        } else if (totalDirectTeamApiTasks > 0) {
-          if (directTeamApiParallelTasks.length > 0) {
-            discoveryMethod = 'Direct Team API (Parallel) + Hybrid Fallback';
-          } else {
-            discoveryMethod = 'Direct Team API + Hybrid Fallback';
-          }
+        if (directTeamApiParallelV099Tasks.length > 0) {
+          discoveryMethod = 'Direct Team API (Independent Parallel Strategy - v0.9.9)';
+          phasesUsed = ['Direct Team API (Independent Parallel v0.9.9)', 'Cross-Reference', 'Relationships'];
+        } else if (directTeamApiParallelTasks.length > 0) {
+          discoveryMethod = 'Direct Team API (Parallel Strategy)';
+          phasesUsed = ['Direct Team API (Parallel)', 'Cross-Reference', 'Relationships'];
+        } else if (directTeamApiTasks.length > 0) {
+          discoveryMethod = 'Pure Direct Team API (Gemini)';
+          phasesUsed = ['Direct Team API (Gemini)', 'Cross-Reference', 'Relationships'];
         } else if (viewsApiFallbackTasks.length > 0 || directListApiFallbackTasks.length > 0) {
+          discoveryMethod = 'Enhanced Multi-List (Hybrid)';
+          phasesUsed = ['Views API', 'Cross-Reference', 'Relationships'];
+        } else if (untaggedTasks.length > 0) {
           discoveryMethod = 'Fallback Methods + Hybrid Discovery';
+          phasesUsed = ['Fallback', 'Cross-Reference', 'Relationships'];
         }
+
 
       } else {
         // No tasks found, but still ran all phases

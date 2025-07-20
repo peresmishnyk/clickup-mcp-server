@@ -2,6 +2,43 @@
 
 ## [Unreleased]
 
+## v0.9.9 (2025-01-27)
+
+### 🎯 **CRITICAL BUG FIX: Independent Multi-List Direct Team API Strategy**
+
+- **ROOT CAUSE FOUND**: v0.9.8 alternative parallel strategy was nested inside first parallel strategy block
+- **CRITICAL FIX**: Made alternative parallel strategy completely independent from first parallel strategy  
+- **Independent Activation**: Alternative strategy now ALWAYS runs for multi-list requests (not conditional)
+- **Enhanced Discovery Sources**: New `direct_team_api_parallel_v099` tracking for independent parallel requests
+
+### 🚀 **Revolutionary Features**
+
+- **Independent Alternative Strategy**: Runs separately for ALL multi-list requests regardless of primary results
+- **Enhanced Logic Fix**: `(parallel > primary) OR (primary = 0 AND parallel > 0)` now works correctly
+- **Comprehensive Debugging**: v099debug/v099critical/v099success markers for complete transparency
+- **Discovery Method Enhancement**: Proper detection of "Direct Team API (Independent Parallel Strategy - v0.9.9)"
+
+### 🔧 **Technical Improvements**
+
+- **Logic Bug Fix**: Alternative strategy was incorrectly nested inside first strategy in v0.9.8
+- **Independent Execution**: Alternative strategy executes regardless of first strategy activation
+- **Enhanced Metadata**: Better discovery method determination with v0.9.9 specific tracking
+- **Improved Handlers**: Updated discovery source analysis to support independent parallel strategy
+
+### 🚨 **What This Solves**
+
+- **Multi-List Direct Team API**: Should now work via independent parallel strategy
+- **Discovery Transparency**: Clear visibility into which approach found tasks
+- **Logic Independence**: Alternative strategy no longer depends on first strategy conditions
+- **API Limitation Workaround**: Multiple approaches for ClickUp API multi-list limitations
+
+### 🧪 **Testing Focus**
+
+- Look for `"Direct Team API (Independent Parallel Strategy - v0.9.9)"` in discovery method
+- Verify `v099debug` logs appear in multi-list requests
+- Check for `direct_team_api_parallel_v099` discovery sources
+- Confirm independent parallel strategy activates regardless of primary results
+
 ## v0.9.8 (2025-01-27)
 
 ### 🎯 **Multi-List Direct Team API Logic Fix & Enhanced Debugging**

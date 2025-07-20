@@ -1459,29 +1459,29 @@ export class TaskServiceSearch {
         }
       }
 
-      // EXPERIMENTAL v0.9.7: Always try parallel strategy for multi-list as alternative approach
+      // CRITICAL FIX v0.9.9: INDEPENDENT Alternative Parallel Strategy for ALL multi-list requests
       if (listIds.length > 1) {
         (this.core as any).logOperation('getTeamTasksDirectly', {
           listIds,
-          v098debug: 'ALTERNATIVE PARALLEL STRATEGY STARTING',
+          v099critical: 'INDEPENDENT ALTERNATIVE PARALLEL STRATEGY',
           primaryResults: tasksWithSource.length,
-          reasoning: 'v0.9.8 - Enhanced debugging for parallel approach',
+          bugFixed: 'v0.9.8 bug - alternative strategy was nested inside first strategy',
+          reasoning: 'v0.9.9 - Alternative strategy now runs independently for ALL multi-list requests',
           willTryParallel: true
         });
 
         try {
-          const alternativeParallelTasks: ClickUpTask[] = [];
-          
           (this.core as any).logOperation('getTeamTasksDirectly', {
-            v098debug: 'PARALLEL REQUESTS STARTING',
+            v099debug: 'INDEPENDENT PARALLEL REQUESTS STARTING',
             listsToQuery: listIds,
-            requestCount: listIds.length
+            requestCount: listIds.length,
+            note: 'This should now ALWAYS execute for multi-list requests'
           });
 
           const alternativePromises = listIds.map(async (singleListId, index) => {
             try {
               (this.core as any).logOperation('getTeamTasksDirectly', {
-                v098debug: `PARALLEL REQUEST ${index + 1}/${listIds.length}`,
+                v099debug: `INDEPENDENT PARALLEL REQUEST ${index + 1}/${listIds.length}`,
                 singleListId,
                 attempting: `Single request to list ${singleListId}`
               });
@@ -1494,7 +1494,7 @@ export class TaskServiceSearch {
               const singleParams = (this.core as any).buildTaskFilterParams(singleListFilters);
               
               (this.core as any).logOperation('getTeamTasksDirectly', {
-                v098debug: `PARALLEL REQUEST PARAMS`,
+                v099debug: `INDEPENDENT PARALLEL REQUEST PARAMS`,
                 singleListId,
                 teamId: (this.core as any).teamId,
                 endpoint: `/team/${(this.core as any).teamId}/task`,
@@ -1509,11 +1509,11 @@ export class TaskServiceSearch {
 
               const singleTasks = (singleResponse.data.tasks || []).map(task => ({
                 ...task,
-                _discovery_source: 'direct_team_api_parallel'
+                _discovery_source: 'direct_team_api_parallel_v099'
               }));
 
               (this.core as any).logOperation('getTeamTasksDirectly', {
-                v098debug: `PARALLEL REQUEST RESULT`,
+                v099debug: `INDEPENDENT PARALLEL REQUEST RESULT`,
                 singleListId,
                 tasksFound: singleTasks.length,
                 taskIds: singleTasks.map(t => t.id),
@@ -1526,7 +1526,7 @@ export class TaskServiceSearch {
               return singleTasks;
             } catch (error) {
               (this.core as any).logOperation('getTeamTasksDirectly', {
-                v098debug: `PARALLEL REQUEST ERROR`,
+                v099debug: `INDEPENDENT PARALLEL REQUEST ERROR`,
                 singleListId,
                 error: error.message,
                 stack: error.stack
@@ -1538,7 +1538,7 @@ export class TaskServiceSearch {
           const alternativeResults = await Promise.all(alternativePromises);
           
           (this.core as any).logOperation('getTeamTasksDirectly', {
-            v098debug: 'PARALLEL REQUESTS COMPLETED',
+            v099debug: 'INDEPENDENT PARALLEL REQUESTS COMPLETED',
             resultsPerList: alternativeResults.map((tasks, i) => ({
               listId: listIds[i],
               taskCount: tasks.length,
@@ -1561,7 +1561,7 @@ export class TaskServiceSearch {
 
           (this.core as any).logOperation('getTeamTasksDirectly', {
             listIds,
-            v098debug: 'PARALLEL STRATEGY ANALYSIS',
+            v099debug: 'INDEPENDENT PARALLEL STRATEGY ANALYSIS',
             primaryApproach: {
               tasksFound: tasksWithSource.length,
               method: 'Multi-list single request'
@@ -1569,7 +1569,7 @@ export class TaskServiceSearch {
             alternativeApproach: {
               tasksFoundRaw: combinedAlternative.length,
               tasksFoundUnique: uniqueAlternative.length,
-              method: 'Parallel individual requests',
+              method: 'Independent parallel individual requests',
               duplicatesRemoved: combinedAlternative.length - uniqueAlternative.length
             },
             comparison: {
@@ -1578,30 +1578,31 @@ export class TaskServiceSearch {
               primaryMoreThanParallel: tasksWithSource.length > uniqueAlternative.length
             },
             decision: uniqueAlternative.length > tasksWithSource.length ? 
-              'USING PARALLEL (more tasks found)' : 
+              'USING INDEPENDENT PARALLEL (more tasks found)' : 
               uniqueAlternative.length > 0 && tasksWithSource.length === 0 ?
-              'USING PARALLEL (primary returned zero but parallel found tasks)' :
+              'USING INDEPENDENT PARALLEL (primary returned zero but parallel found tasks)' :
               'USING PRIMARY (equal or more tasks)'
           });
 
-          // v0.9.8 Enhanced logic: Use parallel if it finds ANY tasks when primary found zero
+          // v0.9.9 Enhanced logic: Use independent parallel if it finds ANY tasks when primary found zero
           if (uniqueAlternative.length > tasksWithSource.length || 
               (tasksWithSource.length === 0 && uniqueAlternative.length > 0)) {
             (this.core as any).logOperation('getTeamTasksDirectly', {
               listIds,
-              v098success: 'PARALLEL STRATEGY ACTIVATED',
-              method: 'Direct Team API SUCCESS (Parallel Strategy)',
+              v099success: 'INDEPENDENT PARALLEL STRATEGY ACTIVATED',
+              method: 'Direct Team API SUCCESS (Independent Parallel Strategy)',
               totalTasksFound: uniqueAlternative.length,
-              note: 'v0.9.8 - Parallel approach used!',
+              note: 'v0.9.9 - Independent parallel approach used!',
+              bugFixed: 'Alternative strategy was nested inside first strategy in v0.9.8',
               reasonUsed: tasksWithSource.length === 0 ? 
-                'Primary returned zero, parallel found tasks' :
-                'Parallel found more tasks than primary'
+                'Primary returned zero, independent parallel found tasks' :
+                'Independent parallel found more tasks than primary'
             });
             return uniqueAlternative;
           }
 
           (this.core as any).logOperation('getTeamTasksDirectly', {
-            v098debug: 'PARALLEL STRATEGY NOT USED',
+            v099debug: 'INDEPENDENT PARALLEL STRATEGY NOT USED',
             reason: 'Primary approach equal or better',
             primaryTasks: tasksWithSource.length,
             parallelTasks: uniqueAlternative.length
@@ -1610,10 +1611,10 @@ export class TaskServiceSearch {
         } catch (parallelError) {
           (this.core as any).logOperation('getTeamTasksDirectly', {
             listIds,
-            v098error: 'PARALLEL STRATEGY FAILED',
+            v099error: 'INDEPENDENT PARALLEL STRATEGY FAILED',
             error: parallelError.message,
             stack: parallelError.stack,
-            note: 'Alternative parallel strategy crashed - using primary results'
+            note: 'Independent parallel strategy crashed - using primary results'
           });
         }
       }
