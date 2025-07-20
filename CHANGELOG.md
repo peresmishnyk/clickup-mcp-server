@@ -2,6 +2,38 @@
 
 ## [Unreleased]
 
+## v0.9.8 (2025-01-27)
+
+### 🎯 **Multi-List Direct Team API Logic Fix & Enhanced Debugging**
+
+- **Root Cause Found**: v0.9.7 alternative parallel strategy had logic bug preventing activation
+- **Enhanced Logic**: Parallel strategy now activates when primary=0 AND parallel>0 (not just parallel>primary)
+- **Radical Debugging**: Comprehensive logging of every parallel request step for transparency
+- **Fixed Activation**: Alternative strategy now properly activates when primary multi-list returns zero tasks
+
+### 🚀 **Revolutionary Features**
+
+- **Enhanced Activation Logic**: `(parallel > primary) OR (primary = 0 AND parallel > 0)`
+- **Detailed Request Logging**: Each parallel request logged with params, response, task counts
+- **Error Transparency**: Complete error tracking with stack traces for debugging
+- **Step-by-Step Analysis**: Full visibility into parallel strategy decision process
+
+### 🔧 **Technical Improvements**
+
+- **Logic Bug Fix**: Corrected activation condition for multi-list scenarios
+- **Enhanced Debugging**: v098debug markers for comprehensive request tracking  
+- **Error Handling**: Improved error logging with stack traces and context
+- **Decision Transparency**: Clear reasoning for strategy selection
+
+### 🎮 **What This Solves**
+
+- **Multi-List Direct Team API**: Should now work via fixed parallel strategy logic
+- **Zero-Task Scenarios**: Parallel strategy activates when primary returns zero but parallel finds tasks
+- **Debug Visibility**: Complete transparency into why strategies activate or fail
+- **API Limitation Workaround**: Better handling of ClickUp multi-list API limitations
+
+Version: 0.9.7 → 0.9.8 (patch release with critical logic fix)
+
 ## v0.9.7 (2025-01-27)
 
 ### 🎯 **Multi-List Direct Team API Logic Fix & Alternative Strategy**
